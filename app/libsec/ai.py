@@ -1,23 +1,27 @@
-"""ИИ-анализ уязвимости: резюме, кого касается, что делать, своя оценка — строго по собранным фактам, строгая JSON-схема.
+"""ИИ-анализ уязвимостей через локальный клиент Claude (подписка), без API и ключей. Решение владельца 2026-11-20.
 
-Провайдеры:
-  api  — Anthropic API (ключ ANTHROPIC_API_KEY в .secrets/ai.env; в хранилище — CLAUDE_API_CA). Основной режим.
-  cli  — локальный `claude -p` (подписка): только если ключа нет, и лишь для CRITICAL/HIGH/KEV, не больше CLI_PER_HOUR.
-Кэш: таблица analysis (vuln_id, input_hash) — повторный анализ только при изменении фактов.
-Защита от выдумок: версии в ответе ИИ сверяются кодом с версиями из источников (verify); не совпало — поле отбрасывается.
+Схема «разбудить — получить — заснуть»: таймер libsec-ai.timer раз в 10 минут запускает `python -m libsec.ai`.
+Если есть свежие записи ленты без разбора (или их факты изменились), процесс будит `claude -p` на пачку до BATCH записей,
+получает JSON по схеме, сохраняет в analysis и завершается. Постоянного процесса нет.
+
+Очерёдность: сначала CRITICAL/HIGH/KEV, потом остальное; только записи за последние FRESH_DAYS дней.
+Лимит: не больше MAX_BATCHES пачек за запуск и BATCHES_PER_HOUR в час (бережём подписку).
+Кэш: analysis(vuln_id, input_hash) — повторный разбор только при изменении фактов.
+Защита от выдумок: исправленные версии из ответа сверяются кодом с источниками (verify), ссылки — только из входных refs.
 """
-import json, logging, os, re, subprocess, time
+import fcntl, json, logging, os, re, subprocess, sys, time
 from . import catalog
-from .db import ROOT, dumps, loads
+from .db import DATA, connect, dumps, loads
 from .pipeline import h
 
 log = logging.getLogger('ai')
-AI_ENV = ROOT / '.secrets/ai.env'
-MODEL = os.environ.get('LIBSEC_AI_MODEL', 'claude-opus-5-5')
-CLI = '/home/ubuntu/.local/bin/claude'
-CLI_PER_HOUR = int(os.environ.get('LIBSEC_AI_CLI_PER_HOUR', '4'))
-API_PER_RUN = int(os.environ.get('LIBSEC_AI_PER_RUN', '20'))
-PROMPT_VERSION = 3
+CLI = os.environ.get('LIBSEC_CLAUDE', '/home/ubuntu/.local/bin/claude')
+BATCH = int(os.environ.get('LIBSEC_AI_BATCH', '8'))
+MAX_BATCHES = int(os.environ.get('LIBSEC_AI_MAX_BATCHES', '2'))
+BATCHES_PER_HOUR = int(os.environ.get('LIBSEC_AI_PER_HOUR', '6'))
+FRESH_DAYS = int(os.environ.get('LIBSEC_AI_FRESH_DAYS', '7'))
+TIMEOUT = 1200
+PROMPT_VERSION = 4
 
 SCHEMA = {
     'type': 'object',
@@ -54,18 +58,8 @@ Rules:
 - Plain, precise English. No marketing, no filler."""
 
 
-def key():
-    if os.environ.get('ANTHROPIC_API_KEY'):
-        return os.environ['ANTHROPIC_API_KEY']
-    if AI_ENV.exists():
-        for l in AI_ENV.read_text().splitlines():
-            if l.startswith('ANTHROPIC_API_KEY='):
-                return l.split('=', 1)[1].strip().strip('"\'') or None
-    return None
-
-
 def enabled():
-    return os.environ.get('LIBSEC_AI', '1') != '0' and (bool(key()) or os.path.exists(CLI))
+    return os.environ.get('LIBSEC_AI', '1') != '0' and os.path.exists(CLI)
 
 
 def facts_for(v):
@@ -101,75 +95,100 @@ def verify(out, fin):
     return out
 
 
-def call_api(fin):
-    import anthropic
-    client = anthropic.Anthropic(api_key=key(), max_retries=3, timeout=180)
-    r = client.beta.messages.create(
-        model=MODEL, max_tokens=4000, system=SYSTEM,
-        betas=['server-side-fallback-2026-07-01'], fallbacks='default',
-        output_config={'effort': 'medium', 'format': {'type': 'json_schema', 'schema': SCHEMA}},
-        messages=[{'role': 'user', 'content': 'Facts (JSON):\n' + dumps(fin)}],
-    )
-    if r.stop_reason == 'refusal':
-        raise RuntimeError('refusal')
-    text = next(b.text for b in r.content if b.type == 'text')
-    return json.loads(text), r.model
-
-
-def call_cli(fin):
-    prompt = (SYSTEM + '\n\nReturn ONLY a JSON object (no prose, no code fences) matching this JSON Schema:\n' + json.dumps(SCHEMA)
-              + '\n\nFacts (JSON):\n' + dumps(fin))
-    env = {**os.environ, 'SEC_TG': '0', 'LIBSEC_JOB': '1'}  # без Stop-хука в топик
+def call_cli(batch):
+    """batch: [(vuln_id, facts)] -> {vuln_id: анализ}. Один запуск claude -p на всю пачку."""
+    items_schema = {'type': 'object', 'properties': {'items': {'type': 'array', 'items': {
+        'type': 'object', 'properties': {'id': {'type': 'string'}, **SCHEMA['properties']},
+        'required': ['id'] + SCHEMA['required'], 'additionalProperties': False}}}, 'required': ['items']}
+    prompt = (SYSTEM + f'\n\nYou get {len(batch)} vulnerabilities. Analyze each one independently, using only its own facts.'
+              '\nReturn ONLY a JSON object (no prose, no code fences) matching this JSON Schema, one item per input id:\n'
+              + json.dumps(items_schema) + '\n\nInput (JSON):\n' + dumps([{'id': vid, 'facts': f} for vid, f in batch]))
+    env = {**os.environ, 'SEC_TG': '0', 'LIBSEC_JOB': '1'}
     p = subprocess.run([CLI, '-p', '--output-format', 'json', '--tools', '', '--setting-sources', '', '--strict-mcp-config',
-                        '--no-session-persistence'],
-                       input=prompt, capture_output=True, text=True, timeout=600, env=env, cwd='/tmp')
+                        '--no-session-persistence'], input=prompt, capture_output=True, text=True, timeout=TIMEOUT, env=env, cwd='/tmp')
     if p.returncode:
-        raise RuntimeError(f'claude -p: {p.stderr[-300:] or p.stdout[-300:]}')
+        raise RuntimeError(f'claude -p rc={p.returncode}: {(p.stderr or p.stdout)[-300:]}')
     res = json.loads(p.stdout)
-    text = res.get('result', '').strip()
-    text = re.sub(r'^```(json)?|```$', '', text).strip()
-    out = json.loads(text[text.find('{'):text.rfind('}') + 1])
-    miss = [k for k in SCHEMA['required'] if k not in out]
-    if miss:
-        raise ValueError(f'нет полей {miss}')
-    return out, 'claude-cli'
+    if res.get('is_error'):
+        raise RuntimeError(f"claude -p: {str(res.get('result'))[:300]}")
+    text = re.sub(r'^```(json)?|```$', '', res.get('result', '').strip()).strip()
+    data = json.loads(text[text.find('{'):text.rfind('}') + 1])
+    out = {}
+    want = {vid for vid, _ in batch}
+    for it in data.get('items') or []:
+        vid = it.pop('id', None)
+        if vid in want and all(k in it for k in SCHEMA['required']):
+            out[vid] = it
+    return out
 
 
-def run(c):
-    """Проанализировать ещё не разобранные (или изменившиеся) уязвимости ленты. -> число готовых."""
-    if not enabled():
-        return 0
-    api = bool(key())
-    if api:
-        limit, cond = API_PER_RUN, ''
-    else:
-        done_h = c.execute("select count(*) from analysis where model='claude-cli' and created>?", (time.time() - 3600,)).fetchone()[0]
-        limit = CLI_PER_HOUR - done_h
-        cond = " and (priority in ('CRITICAL','HIGH') or kev=1) and feed_ts > strftime('%s','now') - 7*86400"
-    if limit <= 0:
-        return 0
+def pending(c, limit):
     rows = c.execute('select v.*, a.input_hash ah, a.error ae, a.created ac from vulns v left join analysis a on a.vuln_id=v.id'
-                     f' where v.listed=1{cond} order by (v.priority in (\'CRITICAL\',\'HIGH\') or v.kev) desc, v.feed_ts desc limit 400').fetchall()
-    n = 0
+                     ' where v.listed=1 and v.feed_ts > ?'
+                     " order by (v.priority in ('CRITICAL','HIGH') or v.kev) desc, v.feed_ts desc",
+                     (time.time() - FRESH_DAYS * 86400,)).fetchall()
+    todo = []
     for v in rows:
-        if n >= limit:
-            break
         fin = facts_for(v)
         ih = h([PROMPT_VERSION, fin])
         if v['ah'] == ih and (not v['ae'] or time.time() - (v['ac'] or 0) < 3600):
             continue
+        todo.append((v['id'], fin, ih))
+        if len(todo) >= limit:
+            break
+    return todo
+
+
+def run(c):
+    """Одна «побудка»: до MAX_BATCHES пачек. -> число разобранных записей."""
+    if not enabled():
+        return 0
+    done_h = c.execute("select count(distinct created) from analysis where model='claude-cli' and created>?", (time.time() - 3600,)).fetchone()[0]
+    n = 0
+    for _ in range(min(MAX_BATCHES, max(0, BATCHES_PER_HOUR - done_h))):
+        todo = pending(c, BATCH)
+        if not todo:
+            break
+        t0 = time.time()
         try:
-            out, model = call_api(fin) if api else call_cli(fin)
-            out = verify(out, fin)
-            c.execute('insert or replace into analysis(vuln_id,input_hash,model,data,created,error) values(?,?,?,?,?,null)',
-                      (v['id'], ih, model, dumps(out), time.time()))
-            n += 1
-            log.info('ai %s %s -> %s', v['id'], model, out.get('our_score'))
-        except Exception as e:  # noqa: BLE001 — сбой одной записи не роняет цикл
-            log.warning('ai %s: %s', v['id'], e)
-            c.execute('insert or replace into analysis(vuln_id,input_hash,model,data,created,error) values(?,?,?,'
-                      '(select data from analysis where vuln_id=?),?,?)', (v['id'], ih, 'error', v['id'], time.time(), str(e)[:500]))
-            if not api:
-                break
+            got = call_cli([(vid, fin) for vid, fin, _ in todo])
+        except Exception as e:  # noqa: BLE001
+            log.warning('пачка %d: %s', len(todo), e)
+            got = {}
+            err = str(e)[:500]
+        else:
+            err = 'нет в ответе'
+        stamp = time.time()
+        for vid, fin, ih in todo:
+            if vid in got:
+                c.execute('insert or replace into analysis(vuln_id,input_hash,model,data,created,error) values(?,?,?,?,?,null)',
+                          (vid, ih, 'claude-cli', dumps(verify(got[vid], fin)), stamp))
+                n += 1
+            else:
+                c.execute('insert or replace into analysis(vuln_id,input_hash,model,data,created,error) values(?,?,?,'
+                          '(select data from analysis where vuln_id=?),?,?)', (vid, ih, 'error', vid, stamp, err))
         c.commit()
+        log.info('пачка: %d/%d за %.0fs', len(got), len(todo), time.time() - t0)
+        if not got:
+            break
     return n
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(levelname)s %(message)s')
+    lk = open(DATA / 'ai.lock', 'w')
+    try:
+        fcntl.flock(lk, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return log.info('уже идёт')
+    c = connect()
+    if '--status' in sys.argv:
+        print(len(pending(c, 10000)), 'в очереди')
+        return
+    n = run(c)
+    if n:
+        log.info('разобрано %d', n)
+
+
+if __name__ == '__main__':
+    main()

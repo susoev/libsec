@@ -21,11 +21,11 @@ site · RSS · /api/v1 · Telegram queue (urgent now, rest as daily digest)
 - `app/libsec/catalog.py` — tracked products and how each is recognised (CNA names, CPE, distro packages, OSV packages, KEV).
 - `app/libsec/collectors/` — one module per source (`NAME`, `INTERVAL`, `run()`).
 - `app/libsec/normalize.py`, `pipeline.py` — parsing, dedup, recompute, events.
-- `app/libsec/ai.py` — AI analysis (Anthropic API; local `claude -p` fallback).
+- `app/libsec/ai.py` — AI analysis: a timer wakes the local `claude -p` (subscription, no API keys) on a batch of fresh records, stores the JSON and exits.
 - `app/libsec/tg.py` — Telegram queue and rules.
 - `app/libsec/worker.py` — scheduler: `python -m libsec.worker [once [source…] | reparse]`.
 - `app/libsec/web.py`, `app/templates/` — the site, RSS and API.
-- `deploy/` — systemd units `libsec` (web) and `libsec-worker`, nginx config.
+- `deploy/` — systemd units `libsec` (web), `libsec-worker` (collectors) and `libsec-ai.timer`, nginx config.
 - `docs/brief.md` — the original brief; `docs/decisions.md` — decisions made for the MVP.
 
 ## Run

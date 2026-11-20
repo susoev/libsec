@@ -1,0 +1,16 @@
+[Unit]
+Description=libsec AI: разбудить локальный claude -p на пачку свежих уязвимостей и завершиться
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/sec/app
+Environment=HOME=/home/ubuntu
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=LIBSEC_JOB=1
+Environment=SEC_TG=0
+ExecStart=/home/ubuntu/venvs/libsec/bin/python -m libsec.ai
+TimeoutStartSec=50min
+StandardOutput=append:/home/ubuntu/sec/logs/ai.log
+StandardError=append:/home/ubuntu/sec/logs/ai.log

@@ -1,5 +1,5 @@
 """Воркер: по расписанию запускает коллекторы (у каждого свой интервал, меняется в таблице sources),
-затем пересчёт, ИИ-анализ, очередь Telegram. Один процесс — один писатель SQLite.
+затем пересчёт и очередь Telegram. ИИ-анализ — отдельный короткий запуск по таймеру (libsec.ai). Один процесс — один писатель SQLite.
 
   python -m libsec.worker            цикл (systemd: libsec-worker)
   python -m libsec.worker once [имя…]  один проход (все или указанные источники) и выход
@@ -7,7 +7,7 @@
                                        сбросить HTTP-кэш KEV/nginx/OSV-дельт (чтобы взять новые совпадения), пересчитать всё
 """
 import json, logging, signal, sys, time, traceback
-from . import ai, collectors, pipeline, tg
+from . import collectors, pipeline, tg
 from .db import connect, dumps, loads
 
 log = logging.getLogger('worker')
@@ -79,10 +79,6 @@ def tick(c, only=None, force=False):
                 return
     pipeline.relist(c)
     c.commit()
-    try:
-        ai.run(c)
-    except Exception:  # noqa: BLE001
-        log.exception('ai')
     try:
         tg.plan_digest(c)
         tg.pump(c)

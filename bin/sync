@@ -25,10 +25,11 @@ if has '^app/requirements.txt'; then
   [ -x $VENV/bin/python ] || python3 -m venv $VENV
   $VENV/bin/pip -q install -r app/requirements.txt; restart=1
 fi
-if has '^deploy/.*\.service'; then
-  sudo cp deploy/libsec.service deploy/libsec-worker.service /etc/systemd/system/
+if has '^deploy/.*\.\(service\|timer\)'; then
+  sudo cp deploy/libsec.service deploy/libsec-worker.service deploy/libsec-ai.service deploy/libsec-ai.timer /etc/systemd/system/
   sudo systemctl daemon-reload
-  sudo systemctl enable -q libsec libsec-worker; restart=1
+  sudo systemctl enable -q libsec libsec-worker
+  sudo systemctl enable -q --now libsec-ai.timer; restart=1
 fi
 if has '^deploy/libsec.alid.in.nginx'; then
   sudo cp deploy/libsec.alid.in.nginx /etc/nginx/sites-available/libsec.alid.in

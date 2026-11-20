@@ -5,7 +5,7 @@
 - Воркер: юнит `libsec-worker` (`python -m libsec.worker`), лог `logs/worker.log`. Один проход: `cd app && ~/venvs/libsec/bin/python -m libsec.worker once [источник…]`. После правки каталога или парсеров: остановить воркер, `… -m libsec.worker reparse`, запустить воркер.
 - БД: `data/libsec.db` (SQLite). Сайт открывает её только на чтение, пишет только воркер.
 - Интервалы источников: таблица `sources.interval_sec`, работает без деплоя. Состояние источников: https://libsec.alid.in/status.
-- ИИ: ключ `ANTHROPIC_API_KEY` в `.secrets/ai.env`. В хранилище он называется `CLAUDE_API_CA`, раскладывается командой `~/devops/bin/secret push CLAUDE_API_CA`. Пока ключа нет, работает локальный `claude -p`: только CRITICAL/HIGH/KEV, не больше 4 в час.
+- ИИ: `libsec-ai.timer` раз в 10 минут запускает `python -m libsec.ai` (лог `logs/ai.log`, очередь: `… -m libsec.ai --status`). Он будит локальный `claude -p` на пачку до 8 свежих записей и завершается. Лимит — 6 пачек в час.
 - TG: пока не задан канал (`LIBSEC_TG_CHAT` в `deploy/libsec-worker.service`), посты идут в топик Sec, не больше 3 в сутки.
 - Тесты: `cd app && ~/venvs/libsec/bin/python -m tests.test_core`.
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=libsec worker: collectors (CVE/OSV/KEV/EPSS/vendors) -> SQLite -> AI -> Telegram
+Description=libsec worker: collectors (CVE/OSV/KEV/EPSS/vendors) -> SQLite -> Telegram
 After=network-online.target
 Wants=network-online.target
 
