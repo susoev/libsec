@@ -27,6 +27,7 @@ site · RSS · /api/v1 · Telegram queue (urgent now, rest as daily digest)
 - `app/libsec/web.py`, `app/templates/` — the site, RSS, API, sitemap.
 - `app/libsec/i18n.py`, `app/i18n/*.json` — languages by subdomain, UI strings; `tools/i18n_gen.py` fills missing strings via `claude -p`.
 - `deploy/` — systemd units `libsec` (web), `libsec-worker` (collectors) and `libsec-ai.timer`, nginx config.
+- `docs/api.md` — API guide, served at https://websec.in/api/doc.
 - `docs/brief.md` — the original brief; `docs/decisions.md` — decisions made for the MVP.
 
 ## Run

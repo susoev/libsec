@@ -90,3 +90,11 @@
 - `/llms.txt` (формат llmstxt.org) на каждом поддомене: что за сайт, метод, доступ к данным (API, OpenAPI, RSS), страницы, все продукты, свежие критичные/KEV, исходники. Ссылки ведут на поддомен запроса. Текст на английском, разборы в списке — на языке поддомена.
 - `/llms-full.txt` — 500 свежих записей ленты в Markdown: приоритет, CVSS/EPSS/KEV, резюме, действие, проверенные исправленные версии.
 - JSON-LD: Organization (`/#org`, sameAs GitHub) и WebSite с SearchAction — везде. Лента — CollectionPage + ItemList и Dataset (`/#dataset`, раздачи RSS/JSON). Продукты — CollectionPage + ItemList. Продукт — CollectionPage (about SoftwareApplication) + BreadcrumbList. About — AboutPage, Dataset, SoftwareSourceCode. Уязвимость — TechArticle (author/publisher, isBasedOn: запись CVE и ссылки, keywords, isPartOf dataset, translationOfWork у переводов) + BreadcrumbList.
+
+## API для агентов (2026-11-20, решение владельца)
+
+- API только на websec.in и только на английском: `/api*` с языковых поддоменов — 301 на главный домен.
+- Любой ответ начинается с `result` (true/false), `doc` (ссылка на `/api/doc`), `about`, `generated`; ошибки — `result: false` + `error`, статус 400/404.
+- `/api/high10` — последние N (по умолчанию 10, до 50) записей CRITICAL+HIGH по `feed_at`, полные (описание, affected, ссылки, ИИ-разбор), с `fixed_versions` и `action` наверху. Фильтры `product=a,b`, `priority`, `kev`, `n`. Для агента владельца, который по расписанию чинит серверы.
+- `product=` во всех списках принимает несколько слагов через запятую. `/api/v1/products` теперь тоже в конверте (`items`).
+- Справка — `docs/api.md`, отдаётся как `/api/doc` (text/plain). CORS открыт, `Cache-Control: max-age=60`.

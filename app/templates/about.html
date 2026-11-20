@@ -29,11 +29,13 @@
 
 <h2>API</h2>
 <ul>
+  <li><a href="{{ SITE }}/api/doc">{{ _('How to use the API') }}</a> ({{ _('English, main domain only') }})</li>
+  <li><code>GET /api/high10?product=php,nginx</code> — {{ _('the 10 newest critical and high vulnerabilities with fixed versions and what to do') }}</li>
   <li><code>GET /api/v1/vulns?product=nginx&amp;priority=CRITICAL,HIGH&amp;kev=1&amp;since=2026-11-01&amp;limit=50</code> — {{ _('feed (add <code>all=1</code> for history beyond 45 days)') }}</li>
   <li><code>GET /api/v1/vulns/CVE-2024-4577</code> — {{ _('one record with affected versions, references and timeline (any alias works)') }}</li>
   <li><code>GET /api/v1/products</code> — {{ _('catalog') }}</li>
   <li><code>GET /feed.xml?product=php&amp;prio=CRITICAL,HIGH</code> — RSS</li>
-  <li><a href="/api/docs">{{ _('OpenAPI docs') }}</a></li>
+  <li><a href="{{ SITE }}/api/docs">{{ _('OpenAPI docs') }}</a></li>
   <li><a href="/llms.txt">llms.txt</a> · <a href="/llms-full.txt">llms-full.txt</a></li>
 </ul>
 

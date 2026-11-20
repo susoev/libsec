@@ -10,7 +10,9 @@ from pathlib import Path
 from xml.sax.saxutils import escape as xesc
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
@@ -155,8 +157,9 @@ def query(c, product=None, prio=None, kev=False, q=None, listed=True, since=None
     else:
         where.append('v.relevant=1')
     if product:
-        where.append('exists(select 1 from vuln_products p where p.vuln_id=v.id and p.product=?)')
-        args.append(product)
+        ps = [x.strip().lower() for x in product.split(',') if x.strip()] or ['']
+        where.append(f'exists(select 1 from vuln_products p where p.vuln_id=v.id and p.product in ({",".join("?" * len(ps))}))')
+        args += ps
     if prio:
         ps = [p for p in prio.upper().split(',') if p in PRIOS]
         if ps:
@@ -317,33 +320,115 @@ def rss(request: Request, product: str | None = None, prio: str | None = None, k
     return Response(body, media_type='application/rss+xml; charset=utf-8')
 
 
-# ---------- JSON API
-def vuln_json(c, v, a=None, full=False):
-    d = {'id': v['id'], 'aliases': loads(v['aliases'], []), 'title': v['title'], 'url': f"{SITE}/vuln/{v['id']}",
+# ---------- JSON API (только websec.in, только английский; см. /api/doc)
+API_DOC = SITE + '/api/doc'
+API_ABOUT = ('WebSec (websec.in): vulnerabilities in PHP, Python, MySQL, nginx, Apache and 45 more web-server products, '
+             'merged from CVE, OSV/GitHub Advisory, CISA KEV and EPSS, ranked by urgency, with AI summaries and fix versions. '
+             'Read-only, no key. How to use: see "doc".')
+LICENSE = ('Facts: CVE List (CVE terms of use), OSV/GitHub Advisory (CC-BY 4.0), CISA KEV and NVD (public domain), '
+           'EPSS (FIRST.org). Summaries: WebSec, AI-assisted, may contain errors; sources are authoritative.')
+TS = '%Y-%m-%dT%H:%M:%SZ'
+
+
+def api_ok(**kw):
+    """Конверт любого ответа API: result, doc, about — сверху, данные — дальше."""
+    return {'result': True, 'doc': API_DOC, 'about': API_ABOUT, 'generated': fmt_date(time.time(), TS), **kw}
+
+
+def api_err(status, error):
+    return JSONResponse({'result': False, 'doc': API_DOC, 'about': API_ABOUT, 'error': error}, status_code=status)
+
+
+def fixed_versions(v, a):
+    """Версии с исправлением: проверенные в коде из ИИ-разбора, иначе — из диапазонов источников."""
+    if a and a.get('fixed_versions'):
+        return a['fixed_versions']
+    out = []
+    for af in loads(v['affected'], []):
+        out += [f for f in af.get('fixed') or [] if f not in out]
+    return out
+
+
+def vuln_json(c, v, a=None, full=False, events=True):
+    d = {'id': v['id'], 'aliases': loads(v['aliases'], []), 'title': v['title'], 'headline': (a or {}).get('headline'),
+         'url': f"{SITE}/vuln/{v['id']}", 'api': f"{SITE}/api/v1/vulns/{v['id']}",
          'products': loads(v['products'], []), 'priority': v['priority'], 'priority_reason': v['priority_reason'],
+         'exploited': bool(v['kev']),
          'cvss': {'score': v['cvss_score'], 'severity': v['cvss_severity'], 'vector': v['cvss_vector'], 'version': v['cvss_version'],
                   'source': v['cvss_source']} if v['cvss_score'] is not None or v['cvss_severity'] else None,
          'kev': {'added': fmt_date(v['kev_added']), 'due': fmt_date(v['kev_due']), 'ransomware': v['kev_ransom']} if v['kev'] else None,
          'epss': {'score': v['epss'], 'percentile': v['epss_pct'], 'date': v['epss_date']} if v['epss'] is not None else None,
-         'published': fmt_date(v['published'], '%Y-%m-%dT%H:%M:%SZ'), 'modified': fmt_date(v['modified'], '%Y-%m-%dT%H:%M:%SZ'),
+         'published': fmt_date(v['published'], TS), 'modified': fmt_date(v['modified'], TS), 'feed_at': fmt_date(v['feed_ts'], TS),
+         'fixed_versions': fixed_versions(v, a), 'action': (a or {}).get('action'),
          'ai': ({k: a[k] for k in a if not k.startswith('_')} if a else None)}
     if full:
-        d.update(description=v['description'], cwes=loads(v['cwes'], []), affected=loads(v['affected'], []), references=loads(v['refs'], []),
-                 events=[{'type': e['type'], 'ts': fmt_date(e['ts'], '%Y-%m-%dT%H:%M:%SZ'), 'data': loads(e['data'], {})}
-                         for e in c.execute('select * from events where vuln_id=? order by ts', (v['id'],))])
+        d.update(description=v['description'], cwes=loads(v['cwes'], []), affected=loads(v['affected'], []), references=loads(v['refs'], []))
+        if events:
+            d['events'] = [{'type': e['type'], 'ts': fmt_date(e['ts'], TS), 'data': loads(e['data'], {})}
+                           for e in c.execute('select * from events where vuln_id=? order by ts', (v['id'],))]
     return d
+
+
+def since_ts(since):
+    try:
+        return datetime.fromisoformat(since).replace(tzinfo=timezone.utc).timestamp() if since else None
+    except ValueError:
+        raise HTTPException(400, 'since: expected ISO date, e.g. 2026-11-01 or 2026-11-01T12:00:00')
+
+
+API_ENDPOINTS = {
+    'GET /api/high10': 'The 10 newest CRITICAL and HIGH vulnerabilities, full detail (what to fix and how). '
+                       'Params: product=php,nginx  priority=CRITICAL  kev=1  n=1..50',
+    'GET /api/v1/vulns': 'The feed, newest first. Params: product, priority=CRITICAL,HIGH, kev=1, q, since=2026-11-01, all=1, limit<=200, offset',
+    'GET /api/v1/vulns/{id}': 'One record by CVE id or any alias (GHSA, PYSEC...): affected versions, references, timeline',
+    'GET /api/v1/products': 'The product catalog: slugs for the product= parameter',
+    'GET /api/doc': 'How to use this API (Markdown)',
+    'GET /api/openapi.json': 'OpenAPI schema; interactive: /api/docs',
+}
+
+
+@app.middleware('http')
+async def api_guard(request: Request, call_next):
+    """API только на главном домене: с языковых поддоменов — 301 на websec.in. Ответы API открыты для CORS."""
+    p = request.url.path
+    if p != '/api' and not p.startswith('/api/'):
+        return await call_next(request)
+    if lang_of(request) != i18n.DEFAULT:
+        return RedirectResponse(SITE + p + (f'?{request.url.query}' if request.url.query else ''), 301)
+    r = await call_next(request)
+    r.headers.setdefault('Access-Control-Allow-Origin', '*')
+    r.headers.setdefault('Cache-Control', 'public, max-age=60')
+    return r
+
+
+@app.get('/api')
+def api_index():
+    return api_ok(endpoints=[{'endpoint': k, 'url': SITE + k.split(' ', 1)[1], 'what': v} for k, v in API_ENDPOINTS.items()],
+                  quick_start=f'curl -s {SITE}/api/high10', license=LICENSE)
+
+
+@app.get('/api/high10')
+def api_high10(product: str | None = Query(None, description='Comma-separated product slugs, see /api/v1/products'),
+               priority: str = Query('CRITICAL,HIGH', description='CRITICAL, HIGH or both'),
+               kev: int = Query(0, description='1 = only exploited in the wild (CISA KEV)'),
+               n: int = Query(10, ge=1, le=50, description='How many records')):
+    """Последние N критичных/высоких — для агента, который по расписанию чинит серверы."""
+    c = db()
+    total, rows = query(c, product, priority, bool(kev), listed=False, limit=n)
+    ai = analysis_map(c, [r['id'] for r in rows])
+    items = [vuln_json(c, v, ai.get(v['id']), full=True, events=False) for v in rows]
+    return api_ok(count=len(items), total=total, filter={'priority': priority.upper(), 'product': product, 'kev': bool(kev)},
+                  latest_feed_at=items[0]['feed_at'] if items else None, items=items, license=LICENSE)
 
 
 @app.get('/api/v1/vulns')
 def api_vulns(product: str | None = None, priority: str | None = None, kev: int = 0, q: str | None = None,
               since: str | None = Query(None, description='ISO date, by feed time'), all: int = Query(0, description='1 = beyond the 45-day feed window'),
-              limit: int = Query(50, le=200), offset: int = 0):
+              limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
     c = db()
-    st = datetime.fromisoformat(since).replace(tzinfo=timezone.utc).timestamp() if since else None
-    total, rows = query(c, product, priority, bool(kev), q, listed=not all, since=st, limit=limit, offset=offset)
+    total, rows = query(c, product, priority, bool(kev), q, listed=not all, since=since_ts(since), limit=limit, offset=offset)
     ai = analysis_map(c, [r['id'] for r in rows])
-    return {'total': total, 'limit': limit, 'offset': offset, 'items': [vuln_json(c, v, ai.get(v['id'])) for v in rows],
-            'license': 'Facts: CVE List (CVE terms of use), OSV/GitHub Advisory (CC-BY 4.0), CISA KEV and NVD (public domain), EPSS (FIRST.org). Summaries: libsec, AI-assisted.'}
+    return api_ok(total=total, limit=limit, offset=offset, items=[vuln_json(c, v, ai.get(v['id'])) for v in rows], license=LICENSE)
 
 
 @app.get('/api/v1/vulns/{vid}')
@@ -351,16 +436,26 @@ def api_vuln(vid: str):
     c = db()
     v = c.execute('select * from vulns where id=(select vuln_id from aliases where alias=?) or id=?', (vid, vid)).fetchone()
     if not v:
-        raise HTTPException(404)
-    return vuln_json(c, v, analysis_map(c, [v['id']]).get(v['id']), full=True)
+        raise HTTPException(404, f'{vid}: no such record')
+    return api_ok(item=vuln_json(c, v, analysis_map(c, [v['id']]).get(v['id']), full=True), license=LICENSE)
 
 
 @app.get('/api/v1/products')
 def api_products():
     c = db()
     st = {r[0]: (r[1], r[2]) for r in c.execute('select p.product, sum(v.listed), count(*) from vuln_products p join vulns v on v.id=p.vuln_id where v.relevant=1 group by p.product')}
-    return [{'slug': p['slug'], 'name': p['name'], 'category': catalog.CATS[p['cat']], 'feed_count': st.get(p['slug'], (0, 0))[0] or 0,
-             'total': st.get(p['slug'], (0, 0))[1]} for p in catalog.P]
+    return api_ok(items=[{'slug': p['slug'], 'name': p['name'], 'category': catalog.CATS[p['cat']], 'feed_count': st.get(p['slug'], (0, 0))[0] or 0,
+                          'total': st.get(p['slug'], (0, 0))[1]} for p in catalog.P])
+
+
+@app.get('/api/doc', response_class=PlainTextResponse)
+def api_doc():
+    return PlainTextResponse((BASE.parent / 'docs' / 'api.md').read_text(), media_type='text/plain; charset=utf-8')
+
+
+@app.exception_handler(RequestValidationError)
+def bad_params(request: Request, exc):
+    return api_err(400, '; '.join(f"{'.'.join(str(x) for x in e['loc'][1:])}: {e['msg']}" for e in exc.errors()))
 
 
 @app.get('/robots.txt', response_class=PlainTextResponse)
@@ -390,6 +485,8 @@ def llms(request: Request):
            f'Languages: English at {origin(i18n.DEFAULT)}/, translations at ' + ', '.join(f'{origin(l)}/ ({LANGS[l]["name"]})' for l in i18n.TR_LANGS) + '. '
            'AI summaries are machine-translated from English; original CVE descriptions stay in English.', '',
            '## Data access', '',
+           f'- [API guide]({SITE}/api/doc): JSON API, English, main domain only; every response starts with `result` and `doc`',
+           f'- [JSON API: what to fix now]({SITE}/api/high10): the 10 newest CRITICAL/HIGH records with fixed versions and actions, `?product=php,nginx&priority=CRITICAL&kev=1&n=20`',
            f'- [JSON API: feed]({SITE}/api/v1/vulns): `?product=nginx&priority=CRITICAL,HIGH&kev=1&since=2026-11-01&limit=50`, `all=1` for history beyond 45 days',
            f'- [JSON API: one record]({SITE}/api/v1/vulns/CVE-2024-4577): affected versions, references, timeline; any alias (GHSA, PYSEC…) works',
            f'- [JSON API: products]({SITE}/api/v1/products): the catalog',
@@ -480,8 +577,11 @@ def sitemap(request: Request):
     return Response('\n'.join(out), media_type='application/xml; charset=utf-8')
 
 
-@app.exception_handler(404)
-def nf(request: Request, exc):
-    if request.url.path.startswith('/api/'):
-        return JSONResponse({'detail': 'not found'}, status_code=404)
+@app.exception_handler(StarletteHTTPException)
+def http_err(request: Request, exc):
+    p = request.url.path
+    if p == '/api' or p.startswith('/api/'):
+        return api_err(exc.status_code, exc.detail if exc.status_code != 404 or exc.detail != 'Not Found' else 'no such endpoint, see /api')
+    if exc.status_code != 404:
+        return JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
     return render(request, 'base.html', {'notfound': True}, index=False, status=404)
