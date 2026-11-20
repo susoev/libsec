@@ -156,7 +156,7 @@ def run(c):
             break
         fin = facts_for(v)
         ih = h([PROMPT_VERSION, fin])
-        if v['ah'] == ih and (not v['ae'] or time.time() - (v['ac'] or 0) < 6 * 3600):
+        if v['ah'] == ih and (not v['ae'] or time.time() - (v['ac'] or 0) < 3600):
             continue
         try:
             out, model = call_api(fin) if api else call_cli(fin)
