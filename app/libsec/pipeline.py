@@ -126,7 +126,7 @@ def priority(v):
         p = 'CRITICAL' if sev in (None, 'HIGH', 'CRITICAL') else 'HIGH'
     elif sev in order:
         p = sev
-        reasons.append(f'CVSS {v["cvss_score"]} {sev.lower()}')
+        reasons.append(f'CVSS {v["cvss_score"]} {sev.lower()}' if v['cvss_score'] is not None else f'{sev.lower()} per {v["cvss_source"]}')
         if (v['epss'] or 0) >= 0.5 and order.index(p) < 2:
             p = order[order.index(p) + 1]
             reasons.append(f'EPSS {v["epss"]:.0%}')
@@ -198,7 +198,13 @@ def recompute(c, vid):
     published = min([p for p in pub if p] or [ts((kev or {}).get('added')) or time.time()])
     modified = max([m for m in mod if m] or [published])
     cv = pick_cvss([x for f in base for x in f.get('cvss') or []])
-    sev_label = next((f.get('severity_label') for f in osv if f.get('severity_label')), None)
+    from .normalize import TEXT_SEV
+    sev_label, sev_by = None, None
+    for src, lab in [('GHSA', f.get('severity_label')) for f in osv] + [('CNA', f.get('severity_label')) for f in cve] + \
+            [('vendor', TEXT_SEV.get((f.get('vendor_severity') or '').lower())) for f in vend]:
+        if lab:
+            sev_label, sev_by = lab, src
+            break
     products = sorted({p for _, f in F for p in f.get('products') or []})
     refs, seen = [], set()
     for f in rich:
@@ -218,7 +224,7 @@ def recompute(c, vid):
          'published': published, 'modified': modified,
          'cvss_score': cv['score'] if cv else None, 'cvss_severity': (cv['severity'] if cv else sev_label) or None,
          'cvss_vector': cv.get('vector') if cv else None, 'cvss_version': cv.get('version') if cv else None,
-         'cvss_source': cv.get('by') if cv else ('GHSA' if sev_label else None),
+         'cvss_source': cv.get('by') if cv else sev_by,
          'cwes': dumps(sorted({w for f in base for w in f.get('cwes') or []})), 'refs': dumps(refs[:40]), 'affected': dumps(aff[:40]),
          'products': dumps(products), 'kev': 1 if kev else 0, 'kev_added': ts(kev['added']) if kev else None,
          'kev_due': ts(kev['due']) if kev else None, 'kev_ransom': kev.get('ransom') if kev else None,

@@ -10,6 +10,8 @@ import math, re
 from . import catalog
 
 CVE_RE = re.compile(r'^CVE-\d{4}-\d{4,}$')
+# текстовая серьёзность вендоров (Apache: low/moderate/important/critical; nginx: low/medium/major)
+TEXT_SEV = {'critical': 'CRITICAL', 'important': 'HIGH', 'high': 'HIGH', 'major': 'HIGH', 'moderate': 'MEDIUM', 'medium': 'MEDIUM', 'low': 'LOW'}
 
 
 def band(score):
@@ -119,6 +121,11 @@ def parse_cve(rec):
                     x = m[k]
                     f['cvss'].append({'score': float(x['baseScore']), 'severity': (x.get('baseSeverity') or band(float(x['baseScore'])) or '').upper(),
                                       'vector': x.get('vectorString'), 'version': k[5:].replace('_', '.'), 'by': 'CNA' if by == 'cna' else by})
+            o = m.get('other') or {}
+            txt = o.get('content', {}).get('text') if isinstance(o.get('content'), dict) else None
+            lab = TEXT_SEV.get((txt or '').strip().lower())
+            if lab and by == 'cna' and not f.get('severity_label'):
+                f['severity_label'] = lab
         for pt in c.get('problemTypes') or []:
             for d in pt.get('descriptions') or []:
                 if d.get('cweId'):
