@@ -2,24 +2,41 @@
 # Синхрон ~/sec <-> github.com/susoev/libsec и выкладка на libsec.alid.in.
 #   bin/sync "сообщение"   закоммитить всё изменённое, pull --rebase, push, применить
 #   bin/sync               только pull/push + применить
+#   bin/sync --apply       применить всё (юниты, nginx, зависимости, рестарт) без git
 set -euo pipefail
 cd "$(dirname "$0")/.."
-before=$(git rev-parse HEAD)
-if [ -n "$(git status --porcelain)" ]; then
-  git add -A
-  git commit -qm "${1:-sync $(date '+%F %T')}"
+VENV=/home/ubuntu/venvs/libsec
+apply_all=0
+if [ "${1:-}" = "--apply" ]; then
+  apply_all=1; changed=""
+else
+  before=$(git rev-parse HEAD)
+  if [ -n "$(git status --porcelain)" ]; then
+    git add -A
+    git commit -qm "${1:-sync $(date '+%F %T')}"
+  fi
+  git pull -q --rebase origin main
+  git push -q origin main
+  changed=$(git diff --name-only "$before" HEAD)
 fi
-git pull -q --rebase origin main
-git push -q origin main
-changed=$(git diff --name-only "$before" HEAD)
-dirty_app=$(echo "$changed" | grep -c '^app/' || true)
-if echo "$changed" | grep -q '^deploy/libsec.service'; then
-  sudo cp deploy/libsec.service /etc/systemd/system/ && sudo systemctl daemon-reload; dirty_app=1
+has() { [ $apply_all = 1 ] || echo "$changed" | grep -q "$1"; }
+restart=0
+if has '^app/requirements.txt'; then
+  [ -x $VENV/bin/python ] || python3 -m venv $VENV
+  $VENV/bin/pip -q install -r app/requirements.txt; restart=1
 fi
-if echo "$changed" | grep -q '^deploy/libsec.alid.in.nginx'; then
+if has '^deploy/.*\.service'; then
+  sudo cp deploy/libsec.service deploy/libsec-worker.service /etc/systemd/system/
+  sudo systemctl daemon-reload
+  sudo systemctl enable -q libsec libsec-worker; restart=1
+fi
+if has '^deploy/libsec.alid.in.nginx'; then
   sudo cp deploy/libsec.alid.in.nginx /etc/nginx/sites-available/libsec.alid.in
   sudo nginx -t -q && sudo systemctl reload nginx
 fi
-[ "$dirty_app" != 0 ] && sudo systemctl restart libsec && sleep 1
+has '^app/' && restart=1
+if [ $restart = 1 ]; then
+  sudo systemctl restart libsec libsec-worker; sleep 2
+fi
 git log -1 --format='HEAD %h %s'
 curl -sf https://libsec.alid.in/health >/dev/null && echo "libsec.alid.in: ok" || { echo "libsec.alid.in: НЕ отвечает"; exit 1; }

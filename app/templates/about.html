@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}About, method and API — libsec{% endblock %}
+{% block main %}
+<h1>About libsec</h1>
+<p class="sub">A focused feed of vulnerabilities that matter to people running web servers and web applications.</p>
+
+<h2>How it works</h2>
+<ol>
+  <li><b>Collect.</b> One collector per source, each on its own schedule, with conditional requests and deltas (no full re-downloads).</li>
+  <li><b>Normalize &amp; deduplicate.</b> CVE, GHSA, PYSEC, GO and vendor IDs are merged into one record with aliases. Later facts (new CVSS, KEV listing, fixed versions) become <i>events</i> on the same record instead of duplicate posts.</li>
+  <li><b>Filter.</b> Only records that match the <a href="/products">product catalog</a> go further. The Linux kernel is included only for exploited or high-severity issues.</li>
+  <li><b>Prioritize.</b> A transparent rule combines vendor/CNA CVSS, CISA KEV and EPSS. CVSS is never invented: it is shown with its source.</li>
+  <li><b>Analyze (AI).</b> A model writes a short summary, preconditions, action and an urgency score for a typical web server, using only the collected facts and a strict JSON schema. Fixed versions it mentions are checked against source data in code. AI text is always labelled.</li>
+  <li><b>Publish.</b> This site, RSS, JSON API and Telegram (urgent items instantly, the rest as a daily digest).</li>
+</ol>
+
+<h2>Sources</h2>
+<div class="tbl"><table>
+<tr><th>Source</th><th>What it gives</th><th>How / how often</th><th>License</th></tr>
+<tr><td><a href="https://github.com/CVEProject/cvelistV5">CVE List V5</a></td><td>All CVE records, CNA scores, affected versions</td><td>hourly delta releases, 15 min</td><td>CVE Terms of Use</td></tr>
+<tr><td><a href="https://osv.dev/">OSV.dev</a> (incl. GitHub Advisory)</td><td>Package ecosystems: Packagist, PyPI, npm, Go, Maven, RubyGems — exact ranges</td><td>modified_id.csv deltas, 15 min</td><td>CC-BY 4.0</td></tr>
+<tr><td><a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog">CISA KEV</a></td><td>Exploited in the wild</td><td>JSON, hourly</td><td>Public domain</td></tr>
+<tr><td><a href="https://www.first.org/epss/">EPSS</a></td><td>Probability of exploitation in 30 days</td><td>API, daily</td><td>FIRST.org, free use with attribution</td></tr>
+<tr><td><a href="https://www.cve.org/">CVE Services API</a></td><td>Records for CVEs first seen elsewhere</td><td>on demand</td><td>CVE Terms of Use</td></tr>
+<tr><td><a href="https://nginx.org/en/security_advisories.html">nginx advisories</a></td><td>Vendor severity and fixed branches</td><td>HTML, hourly</td><td>link + paraphrase</td></tr>
+</table></div>
+
+<h2>API</h2>
+<ul>
+  <li><code>GET /api/v1/vulns?product=nginx&amp;priority=CRITICAL,HIGH&amp;kev=1&amp;since=2026-11-01&amp;limit=50</code> — feed (add <code>all=1</code> for history beyond 45 days)</li>
+  <li><code>GET /api/v1/vulns/CVE-2024-4577</code> — one record with affected versions, references and timeline (any alias works)</li>
+  <li><code>GET /api/v1/products</code> — catalog</li>
+  <li><code>GET /feed.xml?product=php&amp;prio=CRITICAL,HIGH</code> — RSS</li>
+  <li><a href="/api/docs">OpenAPI docs</a></li>
+</ul>
+
+<h2>Caveats</h2>
+<p>This is an MVP. Matching by product names is heuristic and can miss or over-include items; AI summaries can be wrong — the sources and the version table are authoritative. No exploit code is published here.</p>
+{% endblock %}

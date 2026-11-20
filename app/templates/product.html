@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ p.name }} vulnerabilities — libsec{% endblock %}
+{% block head %}<link rel="alternate" type="application/rss+xml" title="libsec · {{ p.name }}" href="/feed.xml?product={{ p.slug }}">{% endblock %}
+{% block main %}
+<h1>{{ p.name }}</h1>
+<p class="sub">{{ CATS[p.cat] }} · {{ total }} known vulnerabilities, newest first ·
+  <a href="/?product={{ p.slug }}">in feed</a> · <a href="/feed.xml?product={{ p.slug }}">RSS</a> · <a href="/api/v1/vulns?product={{ p.slug }}&all=1">JSON</a></p>
+{% for v in rows %}{% include "_card.html" %}{% else %}<p class="sub">No known vulnerabilities in the collected window yet.</p>{% endfor %}
+{% if pages > 1 %}
+<div class="pager">
+  {% if page > 1 %}<a href="?page={{ page - 1 }}">← Newer</a>{% endif %}<span>page {{ page }} / {{ pages }}</span>{% if page < pages %}<a href="?page={{ page + 1 }}">Older →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Status — libsec{% endblock %}
+{% block main %}
+<h1>Collector status</h1>
+<p class="sub">{{ st.vulns }} vulnerabilities stored · {{ st.relevant }} match the product catalog · {{ st.listed }} in the 45-day feed · {{ st.ai }} AI analyses</p>
+<div class="tbl"><table>
+  <tr><th>Source</th><th>Every</th><th>Last run</th><th>Last OK</th><th>New last run</th><th>Stored</th><th>Error</th></tr>
+  {% for s in src %}
+  <tr><td><b>{{ s.name }}</b>{% if not s.enabled %} <span class="note">off</span>{% endif %}</td>
+      <td>{{ (s.interval_sec // 60) }} min</td><td>{{ s.last_run|ago }}</td>
+      <td class="{{ 'ok' if s.last_ok and not s.last_error else 'bad' }}">{{ s.last_ok|ago or '—' }}</td>
+      <td>{{ s.last_new }}</td><td>{{ st.raw.get(s.name, 0) }}</td><td class="bad note">{{ s.last_error or '' }}</td></tr>
+  {% endfor %}
+</table></div>
+<p class="note">Telegram queue: {% for k, n in st.tg.items() %}{{ k }} {{ n }}{{ ' · ' if not loop.last }}{% else %}empty{% endfor %}</p>
+{% endblock %}

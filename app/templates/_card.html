@@ -1,0 +1,18 @@
+{% set a = ai.get(v.id) %}
+<article class="card">
+  <div class="top">
+    <span class="badge p-{{ v.priority }}">{{ v.priority|lower }}</span>
+    {% if v.kev %}<span class="badge kev" title="CISA Known Exploited Vulnerabilities">exploited</span>{% endif %}
+    {% for p in v.products|loads %}{% if p in catalog.BY_SLUG %}<a class="tag" href="/product/{{ p }}">{{ catalog.BY_SLUG[p].name }}</a>{% endif %}{% endfor %}
+    <span class="mono">{{ v.id }}</span>
+    <span>· {{ v.feed_ts|ago }}</span>
+  </div>
+  <h3><a href="/vuln/{{ v.id }}">{{ (a.headline if a and a.headline else v.title) or v.id }}</a></h3>
+  <p>{% if a and a.summary %}{{ a.summary }}{% else %}{{ (v.description or '')[:280] }}{% if (v.description or '')|length > 280 %}…{% endif %}{% endif %}</p>
+  <div class="meta">
+    {% if v.cvss_score is not none %}<span>CVSS {{ v.cvss_score }} <small>({{ v.cvss_source }})</small></span>{% elif v.cvss_severity %}<span>{{ v.cvss_severity|lower }} ({{ v.cvss_source }})</span>{% endif %}
+    {% if v.epss is not none %}<span>EPSS {{ '%.1f'|format(v.epss * 100) }}%</span>{% endif %}
+    {% if v.kev %}<span>KEV since {{ v.kev_added|date }}</span>{% endif %}
+    {% if a %}<span class="badge ai" title="AI-assisted summary">AI</span>{% endif %}
+  </div>
+</article>

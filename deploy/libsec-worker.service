@@ -1,0 +1,22 @@
+[Unit]
+Description=libsec worker: collectors (CVE/OSV/KEV/EPSS/vendors) -> SQLite -> AI -> Telegram
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/sec/app
+Environment=HOME=/home/ubuntu
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=LIBSEC_JOB=1
+Environment=SEC_TG=0
+# Канал Telegram: пока не задан, посты идут в топик Sec (тестовый режим, лимит в сутки)
+# Environment=LIBSEC_TG_CHAT=@channel_name
+ExecStart=/home/ubuntu/venvs/libsec/bin/python -m libsec.worker
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/ubuntu/sec/logs/worker.log
+StandardError=append:/home/ubuntu/sec/logs/worker.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Web stack vulnerabilities</h1>
+<p class="sub">New and escalated vulnerabilities in {{ catalog.P|length }} products used on web servers — last 45 days, deduplicated across CVE, OSV/GitHub Advisory, CISA KEV, EPSS and vendor advisories.</p>
+<div class="filters">
+  <a class="chip {{ 'on' if not f.prio and not f.kev }}" href="/{{ '?product=' ~ f.product if f.product }}">All <b>{{ counts['CRITICAL'] + counts['HIGH'] + counts['MEDIUM'] + counts['LOW'] + counts['UNRATED'] }}</b></a>
+  {% for p in ['CRITICAL','HIGH','MEDIUM','LOW','UNRATED'] %}
+  <a class="chip {{ 'on' if f.prio == p }}" href="/?prio={{ p }}{{ '&product=' ~ f.product if f.product }}"><span class="badge p-{{ p }}">&nbsp;</span>{{ p|lower }} <b>{{ counts[p] }}</b></a>
+  {% endfor %}
+  <a class="chip {{ 'on' if f.kev }}" href="/?kev=1{{ '&product=' ~ f.product if f.product }}"><span class="badge kev">&nbsp;</span>exploited <b>{{ counts['KEV'] }}</b></a>
+  <form method="get" action="/">
+    <select name="product" onchange="this.form.submit()">
+      <option value="">All products</option>
+      {% for p in catalog.P %}<option value="{{ p.slug }}" {{ 'selected' if f.product == p.slug }}>{{ p.name }}{% if pc.get(p.slug) %} ({{ pc[p.slug] }}){% endif %}</option>{% endfor %}
+    </select>
+    {% if f.prio %}<input type="hidden" name="prio" value="{{ f.prio }}">{% endif %}
+    {% if f.kev %}<input type="hidden" name="kev" value="1">{% endif %}
+    <input type="search" name="q" value="{{ f.q or '' }}" placeholder="CVE, GHSA, keyword">
+    <button>Search</button>
+  </form>
+</div>
+{% for v in rows %}{% include "_card.html" %}{% else %}<p class="sub">Nothing matches these filters.</p>{% endfor %}
+{% if pages > 1 %}
+<div class="pager">
+  {% set qs = ('&product=' ~ f.product if f.product else '') ~ ('&prio=' ~ f.prio if f.prio else '') ~ ('&kev=1' if f.kev else '') ~ ('&q=' ~ f.q if f.q else '') %}
+  {% if page > 1 %}<a href="/?page={{ page - 1 }}{{ qs }}">← Newer</a>{% endif %}
+  <span>page {{ page }} / {{ pages }} · {{ total }} items</span>
+  {% if page < pages %}<a href="/?page={{ page + 1 }}{{ qs }}">Older →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

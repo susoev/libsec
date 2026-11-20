@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}libsec — web stack vulnerability feed{% endblock %}</title>
+<meta name="description" content="{% block desc %}Fresh vulnerabilities in PHP, Python, MySQL, nginx, Apache and other web-server software, deduplicated across CVE, OSV, GitHub Advisory, CISA KEV and EPSS.{% endblock %}">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/static/style.css?v=3">
+<link rel="alternate" type="application/rss+xml" title="libsec" href="/feed.xml">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 4 7v8c0 7 5 13 12 15 7-2 12-8 12-15V7z' fill='%231f5eff'/%3E%3C/svg%3E">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header><div class="wrap">
+  <a class="logo" href="/">lib<span>sec</span></a>
+  <nav>
+    <a href="/" class="{{ 'on' if request.url.path == '/' }}">Feed</a>
+    <a href="/products" class="{{ 'on' if request.url.path.startswith('/product') }}">Products</a>
+    <a href="/about" class="{{ 'on' if request.url.path == '/about' }}">About &amp; API</a>
+    <a href="/status" class="{{ 'on' if request.url.path == '/status' }}">Status</a>
+    <a href="/feed.xml">RSS</a>
+  </nav>
+</div></header>
+<main><div class="wrap">
+{% block main %}{% if notfound %}<h1>Not found</h1><p class="sub"><a href="/">Back to the feed</a></p>{% endif %}{% endblock %}
+</div></main>
+<footer><div class="wrap">
+  libsec MVP · data: <a href="https://www.cve.org/">CVE</a>, <a href="https://osv.dev/">OSV</a> &amp; <a href="https://github.com/advisories">GitHub Advisory</a> (CC-BY 4.0),
+  <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog">CISA KEV</a>, <a href="https://www.first.org/epss/">EPSS</a>, vendor advisories.
+  Summaries marked AI are machine-generated from these facts — verify before acting.
+</div></footer>
+</body>
+</html>
