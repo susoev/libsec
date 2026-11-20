@@ -2,6 +2,13 @@
 
 Описание проекта — будет дополнено.
 
+## Код, сайт, git
+
+- Репозиторий: github.com/susoev/libsec (**публичный**, ветка `main`), рабочая копия — сама папка `~/sec`. Секреты, `data/`, `logs/` в `.gitignore` — ничего секретного не коммитить.
+- MVP: https://libsec.alid.in → nginx (`deploy/libsec.alid.in.nginx`, сертификат `*.alid.in`) → `app/app.py` на 127.0.0.1:8795, юнит `libsec` (`deploy/libsec.service`). Проверка: `/health`.
+- `bin/sync "сообщение"` — коммит, pull --rebase, push; при изменениях в `app/` перезапускает `libsec`, в `deploy/` — переустанавливает юнит/nginx; в конце проверяет сайт.
+
+- `bin/sync` — синхрон с GitHub и выкладка (см. выше).
 - `bin/tg`, `bin/dispatch`, `bin/stop-hook` — мост с топиком Sec (см. ниже).
 - `.secrets/tg.env` — токен бота (ключ `TG_BOT_MAIN`, меняется через `dok`). Не выводить и никуда не копировать.
 

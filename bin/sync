@@ -1,0 +1,25 @@
+#!/bin/bash
+# Синхрон ~/sec <-> github.com/susoev/libsec и выкладка на libsec.alid.in.
+#   bin/sync "сообщение"   закоммитить всё изменённое, pull --rebase, push, применить
+#   bin/sync               только pull/push + применить
+set -euo pipefail
+cd "$(dirname "$0")/.."
+before=$(git rev-parse HEAD)
+if [ -n "$(git status --porcelain)" ]; then
+  git add -A
+  git commit -qm "${1:-sync $(date '+%F %T')}"
+fi
+git pull -q --rebase origin main
+git push -q origin main
+changed=$(git diff --name-only "$before" HEAD)
+dirty_app=$(echo "$changed" | grep -c '^app/' || true)
+if echo "$changed" | grep -q '^deploy/libsec.service'; then
+  sudo cp deploy/libsec.service /etc/systemd/system/ && sudo systemctl daemon-reload; dirty_app=1
+fi
+if echo "$changed" | grep -q '^deploy/libsec.alid.in.nginx'; then
+  sudo cp deploy/libsec.alid.in.nginx /etc/nginx/sites-available/libsec.alid.in
+  sudo nginx -t -q && sudo systemctl reload nginx
+fi
+[ "$dirty_app" != 0 ] && sudo systemctl restart libsec && sleep 1
+git log -1 --format='HEAD %h %s'
+curl -sf https://libsec.alid.in/health >/dev/null && echo "libsec.alid.in: ok" || { echo "libsec.alid.in: НЕ отвечает"; exit 1; }
