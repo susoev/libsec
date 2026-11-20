@@ -13,7 +13,7 @@
 ## Код, сайт, git
 
 - Репозиторий: github.com/susoev/websec.in (**публичный**, ветка `main`), рабочая копия — сама папка `~/sec`. Секреты, `data/`, `logs/` в `.gitignore` — ничего секретного не коммитить.
-- Сайт: https://websec.in (с 2026-11-20; домен на Dynadot, DNS там же) → nginx (`deploy/websec.in.nginx`, сертификат `websec.in` + `*.websec.in`, dns-01 через API Dynadot; `www`, поддомены и старый libsec.alid.in — 301 на websec.in) → uvicorn `websec.web:app` на 127.0.0.1:8795, юнит `websec` (`deploy/websec.service`). Проверка: `/health`.
+- Сайт: https://websec.in (с 2026-11-20; домен на Dynadot, DNS там же) → nginx (`deploy/websec.in.nginx`, сертификат `websec.in` + `*.websec.in`, dns-01 через API Dynadot; `www` и поддомены — 301 на websec.in) → uvicorn `websec.web:app` на 127.0.0.1:8795, юнит `websec` (`deploy/websec.service`). Проверка: `/health`.
 - `bin/sync "сообщение"` — коммит, pull --rebase, push. Если менялся `app/`, перезапускает `websec` и `websec-worker`; `deploy/` — переустанавливает юниты и nginx; `app/requirements.txt` — ставит зависимости. В конце проверяет сайт. `bin/sync --apply` применяет всё без git.
 
 - `bin/sync` — синхрон с GitHub и выкладка (см. выше).

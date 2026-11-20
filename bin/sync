@@ -34,7 +34,6 @@ fi
 if has '^deploy/websec.in.nginx'; then
   sudo cp deploy/websec.in.nginx /etc/nginx/sites-available/websec.in
   sudo ln -sf /etc/nginx/sites-available/websec.in /etc/nginx/sites-enabled/websec.in
-  sudo rm -f /etc/nginx/sites-enabled/libsec.alid.in
   sudo nginx -t -q && sudo systemctl reload nginx
 fi
 has '^app/' && restart=1

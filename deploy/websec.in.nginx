@@ -1,7 +1,7 @@
 # websec: https://websec.in -> ~/sec/app (127.0.0.1:8795)
 # Сертификат: websec.in + *.websec.in (certbot dns-01 через API Dynadot, хуки /usr/local/sbin/dynadot-acme-*).
 # Языковые зеркала: es pt fr de ru zh ja .websec.in -> тот же бэкенд, язык выбирает приложение по Host (websec/i18n.py).
-# www и прочие поддомены, а также старый libsec.alid.in -> 301 на https://websec.in.
+# www и прочие поддомены -> 301 на https://websec.in.
 server {
 	listen 80;
 	listen [::]:80;
@@ -12,7 +12,7 @@ server {
 server {
 	listen 80;
 	listen [::]:80;
-	server_name websec.in *.websec.in libsec.alid.in;
+	server_name websec.in *.websec.in;
 	return 301 https://websec.in$request_uri;
 }
 
@@ -22,15 +22,6 @@ server {
 	server_name *.websec.in;
 	ssl_certificate     /etc/letsencrypt/live/websec.in/fullchain.pem;
 	ssl_certificate_key /etc/letsencrypt/live/websec.in/privkey.pem;
-	return 301 https://websec.in$request_uri;
-}
-
-server {
-	listen 443 ssl;
-	listen [::]:443 ssl;
-	server_name libsec.alid.in;
-	ssl_certificate     /etc/letsencrypt/live/alid.in/fullchain.pem;
-	ssl_certificate_key /etc/letsencrypt/live/alid.in/privkey.pem;
 	return 301 https://websec.in$request_uri;
 }
 
