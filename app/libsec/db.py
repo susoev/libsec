@@ -49,6 +49,10 @@ create index if not exists events_ts on events(ts desc);
 create table if not exists analysis(
   vuln_id text primary key, input_hash text, model text, data text, created real, error text
 );
+-- переводы ИИ-разбора на языки поддоменов: input_hash = i18n.tr_hash(английский разбор)
+create table if not exists analysis_tr(
+  vuln_id text, lang text, input_hash text, data text, created real, error text, primary key(vuln_id, lang)
+);
 -- очередь Telegram
 create table if not exists tg_queue(
   id integer primary key, chat text, thread text, kind text, vuln_id text, text text,

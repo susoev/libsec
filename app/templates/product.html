@@ -1,14 +1,23 @@
 {% extends "base.html" %}
-{% block title %}{{ p.name }} vulnerabilities — libsec{% endblock %}
-{% block head %}<link rel="alternate" type="application/rss+xml" title="libsec · {{ p.name }}" href="/feed.xml?product={{ p.slug }}">{% endblock %}
+{% block title %}{{ _('{name} vulnerabilities', name=p.name) }}{% if page > 1 %} — {{ _('page {n}', n=page) }}{% endif %} — {{ BRAND }}{% endblock %}
+{% block desc %}{{ _('Known security vulnerabilities in {name}: CVE and advisories with affected and fixed versions, CVSS, EPSS and CISA KEV status, newest first.', name=p.name) }}{% endblock %}
+{% block head %}<link rel="alternate" type="application/rss+xml" title="{{ BRAND }} · {{ p.name }}" href="/feed.xml?product={{ p.slug }}">
+<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
+  {"@type": "ListItem", "position": 1, "name": BRAND, "item": ORIGIN ~ "/"},
+  {"@type": "ListItem", "position": 2, "name": _('Products')|string, "item": ORIGIN ~ "/products"},
+  {"@type": "ListItem", "position": 3, "name": p.name, "item": ORIGIN ~ "/product/" ~ p.slug}]}|tojson }}</script>{% endblock %}
+{% block crumbs %}<nav class="crumbs"><a href="/">{{ BRAND }}</a> › <a href="/products">{{ _('Products') }}</a> › {{ p.name }}</nav>{% endblock %}
 {% block main %}
-<h1>{{ p.name }}</h1>
-<p class="sub">{{ CATS[p.cat] }} · {{ total }} known vulnerabilities, newest first ·
-  <a href="/?product={{ p.slug }}">in feed</a> · <a href="/feed.xml?product={{ p.slug }}">RSS</a> · <a href="/api/v1/vulns?product={{ p.slug }}&all=1">JSON</a></p>
-{% for v in rows %}{% include "_card.html" %}{% else %}<p class="sub">No known vulnerabilities in the collected window yet.</p>{% endfor %}
+<h1>{{ _('{name} vulnerabilities', name=p.name) }}</h1>
+<p class="sub">{{ _(CATS[p.cat]) }} · {{ _('{n} known vulnerabilities, newest first', n=total) }} ·
+  <a href="/?product={{ p.slug }}" rel="nofollow">{{ _('in feed') }}</a> · <a href="/feed.xml?product={{ p.slug }}">RSS</a> · <a href="/api/v1/vulns?product={{ p.slug }}&all=1" rel="nofollow">JSON</a></p>
+{% for v in rows %}{% include "_card.html" %}{% else %}<p class="sub">{{ _('No known vulnerabilities in the collected window yet.') }}</p>{% endfor %}
 {% if pages > 1 %}
 <div class="pager">
-  {% if page > 1 %}<a href="?page={{ page - 1 }}">← Newer</a>{% endif %}<span>page {{ page }} / {{ pages }}</span>{% if page < pages %}<a href="?page={{ page + 1 }}">Older →</a>{% endif %}
+  {% if page > 1 %}<a href="?page={{ page - 1 }}" rel="prev">← {{ _('Newer') }}</a>{% endif %}<span>{{ _('page {n} / {m}', n=page, m=pages) }}</span>{% if page < pages %}<a href="?page={{ page + 1 }}" rel="next">{{ _('Older') }} →</a>{% endif %}
 </div>
 {% endif %}
+<h2>{{ _('Other products: {cat}', cat=_(CATS[p.cat])) }}</h2>
+<p class="plinks">{% for x in siblings %}<a href="/product/{{ x.slug }}">{{ _('{name} vulnerabilities', name=x.name) }}</a>{{ ' · ' if not loop.last }}{% endfor %}</p>
+<p class="note"><a href="/products">{{ _('All tracked products') }}</a></p>
 {% endblock %}

@@ -1,39 +1,47 @@
 {% extends "base.html" %}
-{% block title %}About, method and API — libsec{% endblock %}
+{% block title %}{{ _('About, method and API') }} — {{ BRAND }}{% endblock %}
+{% block desc %}{{ _('How {b} collects, deduplicates and prioritizes web-stack vulnerabilities: sources, priority rule, AI summaries, RSS and JSON API. Open source.', b=BRAND) }}{% endblock %}
 {% block main %}
-<h1>About libsec</h1>
-<p class="sub">A focused feed of vulnerabilities that matter to people running web servers and web applications.</p>
+<h1>{{ _('About {b}', b=BRAND) }}</h1>
+<p class="sub">{{ _('A focused feed of vulnerabilities that matter to people running web servers and web applications.') }}</p>
 
-<h2>How it works</h2>
+<h2>{{ _('How it works') }}</h2>
 <ol>
-  <li><b>Collect.</b> One collector per source, each on its own schedule, with conditional requests and deltas (no full re-downloads).</li>
-  <li><b>Normalize &amp; deduplicate.</b> CVE, GHSA, PYSEC, GO and vendor IDs are merged into one record with aliases. Later facts (new CVSS, KEV listing, fixed versions) become <i>events</i> on the same record instead of duplicate posts.</li>
-  <li><b>Filter.</b> Only records that match the <a href="/products">product catalog</a> go further. The Linux kernel is included only for exploited or high-severity issues.</li>
-  <li><b>Prioritize.</b> A transparent rule combines vendor/CNA CVSS, CISA KEV and EPSS. CVSS is never invented: it is shown with its source.</li>
-  <li><b>Analyze (AI).</b> A model writes a short summary, preconditions, action and an urgency score for a typical web server, using only the collected facts and a strict JSON schema. Fixed versions it mentions are checked against source data in code. AI text is always labelled.</li>
-  <li><b>Publish.</b> This site, RSS, JSON API and Telegram (urgent items instantly, the rest as a daily digest).</li>
+  <li>{{ _('<b>Collect.</b> One collector per source, each on its own schedule, with conditional requests and deltas (no full re-downloads).') }}</li>
+  <li>{{ _('<b>Normalize &amp; deduplicate.</b> CVE, GHSA, PYSEC, GO and vendor IDs are merged into one record with aliases. Later facts (new CVSS, KEV listing, fixed versions) become <i>events</i> on the same record instead of duplicate posts.') }}</li>
+  <li>{{ _('<b>Filter.</b> Only records that match the <a href="/products">product catalog</a> go further. The Linux kernel is included only for exploited or high-severity issues.') }}</li>
+  <li>{{ _('<b>Prioritize.</b> A transparent rule combines vendor/CNA CVSS, CISA KEV and EPSS. CVSS is never invented: it is shown with its source.') }}</li>
+  <li>{{ _('<b>Analyze (AI).</b> A model writes a short summary, preconditions, action and an urgency score for a typical web server, using only the collected facts and a strict JSON schema. Fixed versions it mentions are checked against source data in code. AI text is always labelled.') }}</li>
+  <li>{{ _('<b>Translate.</b> The site is available in several languages. AI summaries are machine-translated from English; original CVE descriptions stay in English.') }}</li>
+  <li>{{ _('<b>Publish.</b> This site, RSS, JSON API and Telegram (urgent items instantly, the rest as a daily digest).') }}</li>
 </ol>
 
-<h2>Sources</h2>
+<h2>{{ _('Sources') }}</h2>
 <div class="tbl"><table>
-<tr><th>Source</th><th>What it gives</th><th>How / how often</th><th>License</th></tr>
-<tr><td><a href="https://github.com/CVEProject/cvelistV5">CVE List V5</a></td><td>All CVE records, CNA scores, affected versions</td><td>hourly delta releases, checked every 10 min</td><td>CVE Terms of Use</td></tr>
-<tr><td><a href="https://osv.dev/">OSV.dev</a> (incl. GitHub Advisory)</td><td>Package ecosystems: Packagist, PyPI, npm, Go, Maven, RubyGems — exact ranges</td><td>modified_id.csv deltas, 15 min</td><td>CC-BY 4.0</td></tr>
-<tr><td><a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog">CISA KEV</a></td><td>Exploited in the wild</td><td>JSON, hourly</td><td>Public domain</td></tr>
-<tr><td><a href="https://www.first.org/epss/">EPSS</a></td><td>Probability of exploitation in 30 days</td><td>API, daily</td><td>FIRST.org, free use with attribution</td></tr>
-<tr><td><a href="https://www.cve.org/">CVE Services API</a></td><td>Records for CVEs first seen elsewhere</td><td>on demand</td><td>CVE Terms of Use</td></tr>
-<tr><td><a href="https://nginx.org/en/security_advisories.html">nginx advisories</a></td><td>Vendor severity and fixed branches</td><td>HTML, hourly</td><td>link + paraphrase</td></tr>
+<tr><th>{{ _('Source') }}</th><th>{{ _('What it gives') }}</th><th>{{ _('How / how often') }}</th><th>{{ _('License') }}</th></tr>
+<tr><td><a href="https://github.com/CVEProject/cvelistV5">CVE List V5</a></td><td>{{ _('All CVE records, CNA scores, affected versions') }}</td><td>{{ _('hourly delta releases, checked every 10 min') }}</td><td>CVE Terms of Use</td></tr>
+<tr><td><a href="https://osv.dev/">OSV.dev</a> ({{ _('incl. GitHub Advisory') }})</td><td>{{ _('Package ecosystems: Packagist, PyPI, npm, Go, Maven, RubyGems — exact ranges') }}</td><td>{{ _('modified_id.csv deltas, 15 min') }}</td><td>CC-BY 4.0</td></tr>
+<tr><td><a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog">CISA KEV</a></td><td>{{ _('Exploited in the wild') }}</td><td>{{ _('JSON, hourly') }}</td><td>{{ _('Public domain') }}</td></tr>
+<tr><td><a href="https://www.first.org/epss/">EPSS</a></td><td>{{ _('Probability of exploitation in 30 days') }}</td><td>{{ _('API, daily') }}</td><td>{{ _('FIRST.org, free use with attribution') }}</td></tr>
+<tr><td><a href="https://www.cve.org/">CVE Services API</a></td><td>{{ _('Records for CVEs first seen elsewhere') }}</td><td>{{ _('on demand') }}</td><td>CVE Terms of Use</td></tr>
+<tr><td><a href="https://nginx.org/en/security_advisories.html">{{ _('nginx advisories') }}</a></td><td>{{ _('Vendor severity and fixed branches') }}</td><td>{{ _('HTML, hourly') }}</td><td>{{ _('link + paraphrase') }}</td></tr>
 </table></div>
 
 <h2>API</h2>
 <ul>
-  <li><code>GET /api/v1/vulns?product=nginx&amp;priority=CRITICAL,HIGH&amp;kev=1&amp;since=2026-11-01&amp;limit=50</code> — feed (add <code>all=1</code> for history beyond 45 days)</li>
-  <li><code>GET /api/v1/vulns/CVE-2024-4577</code> — one record with affected versions, references and timeline (any alias works)</li>
-  <li><code>GET /api/v1/products</code> — catalog</li>
+  <li><code>GET /api/v1/vulns?product=nginx&amp;priority=CRITICAL,HIGH&amp;kev=1&amp;since=2026-11-01&amp;limit=50</code> — {{ _('feed (add <code>all=1</code> for history beyond 45 days)') }}</li>
+  <li><code>GET /api/v1/vulns/CVE-2024-4577</code> — {{ _('one record with affected versions, references and timeline (any alias works)') }}</li>
+  <li><code>GET /api/v1/products</code> — {{ _('catalog') }}</li>
   <li><code>GET /feed.xml?product=php&amp;prio=CRITICAL,HIGH</code> — RSS</li>
-  <li><a href="/api/docs">OpenAPI docs</a></li>
+  <li><a href="/api/docs">{{ _('OpenAPI docs') }}</a></li>
 </ul>
 
-<h2>Caveats</h2>
-<p>This is an MVP. Matching by product names is heuristic and can miss or over-include items; AI summaries can be wrong — the sources and the version table are authoritative. No exploit code is published here.</p>
+<h2>{{ _('Open source') }}</h2>
+<p>{{ _('The code of the collectors, the site and the API is public: <a href="{u}" rel="noopener">github.com/susoev/libsec</a>. Issues and pull requests are welcome.', u=GITHUB) }}</p>
+
+<h2>{{ _('Languages') }}</h2>
+<p class="plinks">{% for l, name, href in switch %}<a href="{{ href }}" hreflang="{{ LANGS[l].hreflang }}" lang="{{ LANGS[l].hreflang }}">{{ name }}</a>{{ ' · ' if not loop.last }}{% endfor %}</p>
+
+<h2>{{ _('Caveats') }}</h2>
+<p>{{ _('Matching by product names is heuristic and can miss or over-include items; AI summaries and translations can be wrong — the sources and the version table are authoritative. No exploit code is published here.') }}</p>
 {% endblock %}

@@ -1,34 +1,61 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ LANGS[L].hreflang }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{% block title %}libsec — web stack vulnerability feed{% endblock %}</title>
-<meta name="description" content="{% block desc %}Fresh vulnerabilities in PHP, Python, MySQL, nginx, Apache and other web-server software, deduplicated across CVE, OSV, GitHub Advisory, CISA KEV and EPSS.{% endblock %}">
-<meta name="robots" content="noindex">
-<link rel="stylesheet" href="/static/style.css?v=3">
-<link rel="alternate" type="application/rss+xml" title="libsec" href="/feed.xml">
+<title>{% block title %}{{ BRAND }} — {{ _('web stack vulnerability feed') }}{% endblock %}</title>
+{% set page_title = self.title()|trim %}
+<meta name="description" content="{% filter trim|striptags|truncate(300) %}{% block desc %}{{ _('Fresh vulnerabilities in PHP, Python, MySQL, nginx, Apache and other web-server software, deduplicated across CVE, OSV, GitHub Advisory, CISA KEV and EPSS.') }}{% endblock %}{% endfilter %}">
+{% set page_desc = self.desc()|trim|striptags|truncate(300) %}
+<meta name="robots" content="{{ robots }}">
+{% if robots.startswith('index') %}<link rel="canonical" href="{{ canonical }}">{% endif %}
+{% for hl, href in alts %}<link rel="alternate" hreflang="{{ hl }}" href="{{ href }}">
+{% endfor %}
+<meta property="og:site_name" content="{{ BRAND }}">
+<meta property="og:type" content="{% block ogtype %}website{% endblock %}">
+<meta property="og:title" content="{{ page_title }}">
+<meta property="og:description" content="{{ page_desc }}">
+<meta property="og:url" content="{{ canonical }}">
+<meta property="og:locale" content="{{ LANGS[L].og }}">
+{% for l in page_langs if l != L %}<meta property="og:locale:alternate" content="{{ LANGS[l].og }}">
+{% endfor %}
+<meta name="twitter:card" content="summary">
+<link rel="stylesheet" href="/static/style.css?v=4">
+<link rel="alternate" type="application/rss+xml" title="{{ BRAND }}" href="/feed.xml">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 4 7v8c0 7 5 13 12 15 7-2 12-8 12-15V7z' fill='%231f5eff'/%3E%3C/svg%3E">
+<script type="application/ld+json">{{ {
+  "@context": "https://schema.org", "@type": "WebSite", "name": BRAND, "url": ORIGIN ~ "/", "inLanguage": LANGS[L].hreflang,
+  "description": _('Fresh vulnerabilities in PHP, Python, MySQL, nginx, Apache and other web-server software, deduplicated across CVE, OSV, GitHub Advisory, CISA KEV and EPSS.')|string,
+  "publisher": {"@type": "Organization", "name": BRAND, "url": SITE ~ "/", "sameAs": [GITHUB]},
+  "potentialAction": {"@type": "SearchAction", "target": ORIGIN ~ "/?q={search_term_string}", "query-input": "required name=search_term_string"}
+}|tojson }}</script>
 {% block head %}{% endblock %}
 </head>
 <body>
 <header><div class="wrap">
-  <a class="logo" href="/">lib<span>sec</span></a>
+  <a class="logo" href="/">web<span>sec</span></a>
   <nav>
-    <a href="/" class="{{ 'on' if request.url.path == '/' }}">Feed</a>
-    <a href="/products" class="{{ 'on' if request.url.path.startswith('/product') }}">Products</a>
-    <a href="/about" class="{{ 'on' if request.url.path == '/about' }}">About &amp; API</a>
-    <a href="/status" class="{{ 'on' if request.url.path == '/status' }}">Status</a>
+    <a href="/" class="{{ 'on' if request.url.path == '/' }}">{{ _('Feed') }}</a>
+    <a href="/products" class="{{ 'on' if request.url.path.startswith('/product') }}">{{ _('Products') }}</a>
+    <a href="/about" class="{{ 'on' if request.url.path == '/about' }}">{{ _('About & API') }}</a>
+    <a href="/status" class="{{ 'on' if request.url.path == '/status' }}">{{ _('Status') }}</a>
     <a href="/feed.xml">RSS</a>
+    <a href="{{ GITHUB }}" rel="noopener">GitHub</a>
   </nav>
+  <details class="langs"><summary title="{{ _('Language') }}">{{ LANGS[L].name }}</summary>
+    <div>{% for l, name, href in switch %}<a href="{{ href }}" hreflang="{{ LANGS[l].hreflang }}" lang="{{ LANGS[l].hreflang }}" class="{{ 'on' if l == L }}">{{ name }}</a>{% endfor %}</div>
+  </details>
 </div></header>
 <main><div class="wrap">
-{% block main %}{% if notfound %}<h1>Not found</h1><p class="sub"><a href="/">Back to the feed</a></p>{% endif %}{% endblock %}
+{% block crumbs %}{% endblock %}
+{% block main %}{% if notfound %}<h1>{{ _('Not found') }}</h1><p class="sub"><a href="/">{{ _('Back to the feed') }}</a></p>{% endif %}{% endblock %}
 </div></main>
 <footer><div class="wrap">
-  libsec MVP · data: <a href="https://www.cve.org/">CVE</a>, <a href="https://osv.dev/">OSV</a> &amp; <a href="https://github.com/advisories">GitHub Advisory</a> (CC-BY 4.0),
-  <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog">CISA KEV</a>, <a href="https://www.first.org/epss/">EPSS</a>, vendor advisories.
-  Summaries marked AI are machine-generated from these facts — verify before acting.
+  <p>{{ BRAND }} · {{ _('data:') }} <a href="https://www.cve.org/">CVE</a>, <a href="https://osv.dev/">OSV</a> &amp; <a href="https://github.com/advisories">GitHub Advisory</a> (CC-BY 4.0),
+  <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog">CISA KEV</a>, <a href="https://www.first.org/epss/">EPSS</a>, {{ _('vendor advisories.') }}
+  {{ _('Summaries marked AI are machine-generated from these facts — verify before acting.') }}</p>
+  <p>{{ _('Open source:') }} <a href="{{ GITHUB }}" rel="noopener">github.com/susoev/libsec</a> · <a href="/feed.xml">RSS</a> · <a href="/api/docs">API</a> · <a href="/sitemap.xml">Sitemap</a></p>
+  <p class="langlist">{% for l, name, href in switch %}{% if l == L %}<b>{{ name }}</b>{% else %}<a href="{{ href }}" hreflang="{{ LANGS[l].hreflang }}" lang="{{ LANGS[l].hreflang }}">{{ name }}</a>{% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>
 </div></footer>
 </body>
 </html>

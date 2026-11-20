@@ -1,6 +1,14 @@
 # libsec: https://websec.in -> ~/sec/app (127.0.0.1:8795)
 # Сертификат: websec.in + *.websec.in (certbot dns-01 через API Dynadot, хуки /usr/local/sbin/dynadot-acme-*).
+# Языковые зеркала: es pt fr de ru zh ja .websec.in -> тот же бэкенд, язык выбирает приложение по Host (libsec/i18n.py).
 # www и прочие поддомены, а также старый libsec.alid.in -> 301 на https://websec.in.
+server {
+	listen 80;
+	listen [::]:80;
+	server_name es.websec.in pt.websec.in fr.websec.in de.websec.in ru.websec.in zh.websec.in ja.websec.in;
+	return 301 https://$host$request_uri;
+}
+
 server {
 	listen 80;
 	listen [::]:80;
@@ -29,11 +37,11 @@ server {
 server {
 	listen 443 ssl;
 	listen [::]:443 ssl;
-	server_name websec.in;
+	server_name websec.in es.websec.in pt.websec.in fr.websec.in de.websec.in ru.websec.in zh.websec.in ja.websec.in;
 	ssl_certificate     /etc/letsencrypt/live/websec.in/fullchain.pem;
 	ssl_certificate_key /etc/letsencrypt/live/websec.in/privkey.pem;
-	add_header X-Robots-Tag "noindex, nofollow" always;
-	location = /robots.txt { return 200 "User-agent: *\nDisallow: /\n"; }
+	gzip on;
+	gzip_types text/css application/xml application/rss+xml application/json;
 	location / {
 		proxy_pass http://127.0.0.1:8795;
 		proxy_set_header Host $host;

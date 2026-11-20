@@ -3,7 +3,7 @@
 A vulnerability tracker for the web stack: PHP, Python, MySQL/MariaDB, PostgreSQL, nginx, Apache, Tomcat, OpenSSL, Docker, Laravel, Django and more — 50 products.
 It collects from several sources, merges duplicates, ranks by urgency, writes short AI summaries and publishes a feed, RSS, JSON API and Telegram posts.
 
-Сайт: https://websec.in (старый libsec.alid.in — 301)
+Site: https://websec.in (English) · translations: es / pt / fr / de / ru / zh / ja `.websec.in`
 
 ```
 cvelistV5 delta · OSV/GHSA · CISA KEV · EPSS · CVE API · nginx.org
@@ -21,10 +21,11 @@ site · RSS · /api/v1 · Telegram queue (urgent now, rest as daily digest)
 - `app/libsec/catalog.py` — tracked products and how each is recognised (CNA names, CPE, distro packages, OSV packages, KEV).
 - `app/libsec/collectors/` — one module per source (`NAME`, `INTERVAL`, `run()`).
 - `app/libsec/normalize.py`, `pipeline.py` — parsing, dedup, recompute, events.
-- `app/libsec/ai.py` — AI analysis: a timer wakes the local `claude -p` (subscription, no API keys) on a batch of fresh records, stores the JSON and exits.
+- `app/libsec/ai.py` — AI analysis: a timer wakes the local `claude -p` (subscription, no API keys) on a batch of fresh records, stores the JSON, translates finished analyses into the site languages and exits.
 - `app/libsec/tg.py` — Telegram queue and rules.
 - `app/libsec/worker.py` — scheduler: `python -m libsec.worker [once [source…] | reparse]`.
-- `app/libsec/web.py`, `app/templates/` — the site, RSS and API.
+- `app/libsec/web.py`, `app/templates/` — the site, RSS, API, sitemap.
+- `app/libsec/i18n.py`, `app/i18n/*.json` — languages by subdomain, UI strings; `tools/i18n_gen.py` fills missing strings via `claude -p`.
 - `deploy/` — systemd units `libsec` (web), `libsec-worker` (collectors) and `libsec-ai.timer`, nginx config.
 - `docs/brief.md` — the original brief; `docs/decisions.md` — decisions made for the MVP.
 

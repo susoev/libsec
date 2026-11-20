@@ -1,4 +1,8 @@
-"""Сайт: лента, страница уязвимости, продукты, статус источников, RSS и JSON API. Только чтение БД."""
+"""Сайт: лента, страница уязвимости, продукты, статус источников, RSS, JSON API, sitemap. Только чтение БД.
+
+Язык страницы — по поддомену (i18n.host_lang): websec.in — английский, es.websec.in и т.д. — переводы.
+Ссылки в шаблонах относительные, поэтому пользователь остаётся на своём поддомене.
+"""
 import time
 from datetime import datetime, timezone
 from email.utils import format_datetime
@@ -9,12 +13,14 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from jinja2 import pass_context
 
-from . import catalog
+from . import catalog, i18n
+from .i18n import LANGS, origin
 from .db import DB, connect, loads
 
 BASE = Path(__file__).resolve().parent.parent
-SITE = 'https://websec.in'
+SITE = origin(i18n.DEFAULT)
 PRIOS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNRATED']
 PAGE = 30
 
@@ -38,28 +44,60 @@ def fmt_date(t, f='%Y-%m-%d'):
     return datetime.fromtimestamp(t, timezone.utc).strftime(f) if t else ''
 
 
-def ago(t):
-    if not t:
-        return ''
-    d = time.time() - t
-    if d < 3600:
-        return f'{max(1, int(d // 60))} min ago'
-    if d < 86400:
-        return f'{int(d // 3600)} h ago'
-    if d < 86400 * 60:
-        return f'{int(d // 86400)} d ago'
-    return fmt_date(t)
+tpl.env.filters.update(date=fmt_date, loads=lambda s: loads(s, []),
+                       ago=pass_context(lambda ctx, t: i18n.ago(t, ctx.get('L', i18n.DEFAULT))),
+                       reason=pass_context(lambda ctx, s: i18n.reason(s, ctx.get('L', i18n.DEFAULT))))
+tpl.env.globals.update(soft=lambda ps: [{'@type': 'SoftwareApplication', 'name': catalog.BY_SLUG[p]['name']} for p in ps if p in catalog.BY_SLUG],
+                       catalog=catalog, CATS=catalog.CATS, SITE=SITE, PRIOS=PRIOS, LANGS=LANGS, BRAND=i18n.BRAND, GITHUB=i18n.GITHUB,
+                       year=lambda: datetime.now().year)
 
 
-tpl.env.filters.update(date=fmt_date, ago=ago, loads=lambda s: loads(s, []))
-tpl.env.globals.update(catalog=catalog, CATS=catalog.CATS, SITE=SITE, PRIOS=PRIOS, year=lambda: datetime.now().year)
+def lang_of(request):
+    return i18n.host_lang(request.headers.get('host'))
 
 
-def analysis_map(c, ids):
+def render(request, name, ctx, *, path=None, langs=None, index=True, status=200):
+    """Шаблон + SEO-обвязка: язык, canonical, hreflang (только языки, где страница есть и индексируется), robots.
+    path — канонический путь с нужными параметрами (по умолчанию путь запроса без параметров)."""
+    L = lang_of(request)
+    path = path or request.url.path
+    langs = [l for l in LANGS if langs is None or l in langs]
+    index = index and L in langs
+    alts = [(LANGS[l]['hreflang'], origin(l) + path) for l in langs] if index and len(langs) > 1 else []
+    if alts and i18n.DEFAULT in langs:
+        alts.append(('x-default', origin(i18n.DEFAULT) + path))
+    ctx.update(L=L, _=i18n.gettext(L), ORIGIN=origin(L), canonical=origin(L) + path, alts=alts, path=path,
+               robots='index,follow' if index else 'noindex,follow', page_langs=langs,
+               switch=[(l, LANGS[l]['name'], origin(l) + path) for l in LANGS])
+    return tpl.TemplateResponse(request, name, ctx, status_code=status)
+
+
+def tr_rows(c, ids, lang):
+    """{vuln_id: перевод} — только актуальные (хэш совпадает с текущим английским разбором)."""
+    if lang == i18n.DEFAULT or not ids:
+        return {}
+    q = ','.join('?' * len(ids))
+    return {r[0]: (r[1], loads(r[2])) for r in c.execute(
+        f'select vuln_id, input_hash, data from analysis_tr where lang=? and data is not null and vuln_id in ({q})', [lang] + list(ids))}
+
+
+def analysis_map(c, ids, lang=i18n.DEFAULT):
     if not ids:
         return {}
     q = ','.join('?' * len(ids))
-    return {r['vuln_id']: loads(r['data']) for r in c.execute(f'select vuln_id, data from analysis where data is not null and vuln_id in ({q})', ids)}
+    out = {r['vuln_id']: loads(r['data']) for r in c.execute(f'select vuln_id, data from analysis where data is not null and vuln_id in ({q})', ids)}
+    for vid, (ih, d) in tr_rows(c, list(out), lang).items():
+        if d and ih == i18n.tr_hash(out[vid]):
+            out[vid] = {**out[vid], **d, '_tr': True}
+    return out
+
+
+def tr_langs(c, vid, an):
+    """Языки, на которых у записи есть полная страница (английский + актуальные переводы разбора)."""
+    if not an:
+        return [i18n.DEFAULT]
+    ih = i18n.tr_hash(an)
+    return [i18n.DEFAULT] + [r[0] for r in c.execute('select lang from analysis_tr where vuln_id=? and input_hash=? and data is not null', (vid, ih))]
 
 
 def query(c, product=None, prio=None, kev=False, q=None, listed=True, since=None, limit=PAGE, offset=0):
@@ -111,10 +149,12 @@ def index(request: Request, product: str | None = None, prio: str | None = None,
     c = db()
     page = max(1, page)
     total, rows = query(c, product, prio, bool(kev), q, offset=(page - 1) * PAGE)
-    return tpl.TemplateResponse(request, 'index.html', {
-        'rows': rows, 'ai': analysis_map(c, [r['id'] for r in rows]), 'total': total, 'page': page, 'pages': (total + PAGE - 1) // PAGE,
+    filtered = bool(product or prio or kev or q)
+    return render(request, 'index.html', {
+        'rows': rows, 'ai': analysis_map(c, [r['id'] for r in rows], lang_of(request)), 'total': total, 'page': page, 'pages': (total + PAGE - 1) // PAGE,
         'f': {'product': product, 'prio': prio, 'kev': kev, 'q': q}, 'counts': counts(c),
-        'pc': {r[0]: r[1] for r in c.execute('select p.product, count(*) from vuln_products p join vulns v on v.id=p.vuln_id where v.listed=1 group by p.product')}})
+        'pc': {r[0]: r[1] for r in c.execute('select p.product, count(*) from vuln_products p join vulns v on v.id=p.vuln_id where v.listed=1 group by p.product')}},
+        path='/' + (f'?page={page}' if page > 1 else ''), index=not filtered)
 
 
 @app.get('/vuln/{vid}', response_class=HTMLResponse)
@@ -126,11 +166,23 @@ def vuln(request: Request, vid: str):
         if a and a[0] != vid:
             return Response(status_code=301, headers={'Location': f'/vuln/{a[0]}'})
         raise HTTPException(404)
+    L = lang_of(request)
     ev = c.execute('select * from events where vuln_id=? order by ts', (vid,)).fetchall()
     src = c.execute('select source, external_id, updated from facts where vuln_id=? order by source', (vid,)).fetchall()
-    an = c.execute('select * from analysis where vuln_id=?', (vid,)).fetchone()
-    return tpl.TemplateResponse(request, 'vuln.html', {'v': v, 'events': ev, 'sources': src,
-                                                       'an': loads(an['data']) if an and an['data'] else None, 'an_row': an})
+    an_row = c.execute('select * from analysis where vuln_id=?', (vid,)).fetchone()
+    an_en = loads(an_row['data']) if an_row and an_row['data'] else None
+    an = analysis_map(c, [vid], L).get(vid) if an_en else None
+    prods = [p for p in loads(v['products'], []) if p in catalog.BY_SLUG]
+    related = []
+    for p in prods[:2]:
+        rr = c.execute('select v.id, v.title, v.priority, v.feed_ts from vuln_products p join vulns v on v.id=p.vuln_id'
+                       ' where p.product=? and v.relevant=1 and v.id<>? order by v.feed_ts desc limit 6', (p, vid)).fetchall()
+        if rr:
+            ra = analysis_map(c, [r['id'] for r in rr], L)
+            related.append((catalog.BY_SLUG[p], [(r, ra.get(r['id'])) for r in rr]))
+    return render(request, 'vuln.html', {'v': v, 'events': ev, 'sources': src, 'an': an, 'an_row': an_row, 'prods': prods, 'related': related,
+                                         'head': (an or {}).get('headline') or v['title'] or vid},
+                  path=f'/vuln/{vid}', langs=tr_langs(c, vid, an_en), index=bool(v['relevant']))
 
 
 @app.get('/products', response_class=HTMLResponse)
@@ -139,7 +191,7 @@ def products(request: Request):
     st = {r['product']: r for r in c.execute(
         'select p.product, sum(v.listed) listed, count(*) total, sum(v.kev) kev, max(v.feed_ts) last from vuln_products p'
         ' join vulns v on v.id=p.vuln_id where v.relevant=1 group by p.product')}
-    return tpl.TemplateResponse(request, 'products.html', {'st': st})
+    return render(request, 'products.html', {'st': st})
 
 
 @app.get('/product/{slug}', response_class=HTMLResponse)
@@ -149,8 +201,11 @@ def product(request: Request, slug: str, page: int = 1):
     c = db()
     page = max(1, page)
     total, rows = query(c, slug, listed=False, offset=(page - 1) * PAGE)
-    return tpl.TemplateResponse(request, 'product.html', {'p': catalog.BY_SLUG[slug], 'rows': rows, 'ai': analysis_map(c, [r['id'] for r in rows]),
-                                                          'total': total, 'page': page, 'pages': (total + PAGE - 1) // PAGE})
+    p = catalog.BY_SLUG[slug]
+    return render(request, 'product.html', {'p': p, 'rows': rows, 'ai': analysis_map(c, [r['id'] for r in rows], lang_of(request)),
+                                            'total': total, 'page': page, 'pages': (total + PAGE - 1) // PAGE,
+                                            'siblings': [x for x in catalog.P if x['cat'] == p['cat'] and x['slug'] != slug]},
+                  path=f'/product/{slug}' + (f'?page={page}' if page > 1 else ''))
 
 
 @app.get('/status', response_class=HTMLResponse)
@@ -165,20 +220,23 @@ def status(request: Request):
         'raw': {r[0]: r[1] for r in c.execute('select source, count(*) from raw_items group by source')},
         'tg': {r[0]: r[1] for r in c.execute('select status, count(*) from tg_queue group by status')},
     }
-    return tpl.TemplateResponse(request, 'status.html', {'src': src, 'st': st, 'now': time.time()})
+    return render(request, 'status.html', {'src': src, 'st': st, 'now': time.time()}, index=False)
 
 
 @app.get('/about', response_class=HTMLResponse)
 def about(request: Request):
-    return tpl.TemplateResponse(request, 'about.html', {})
+    return render(request, 'about.html', {})
 
 
 # ---------- RSS
 @app.get('/feed.xml')
-def rss(product: str | None = None, prio: str | None = None, kev: int = 0):
+def rss(request: Request, product: str | None = None, prio: str | None = None, kev: int = 0):
     c = db()
-    _, rows = query(c, product, prio, bool(kev), limit=50)
-    ai = analysis_map(c, [r['id'] for r in rows])
+    L = lang_of(request)
+    _ = i18n.gettext(L)
+    site = origin(L)
+    _n, rows = query(c, product, prio, bool(kev), limit=50)
+    ai = analysis_map(c, [r['id'] for r in rows], L)
     items = []
     for v in rows:
         a = ai.get(v['id']) or {}
@@ -186,14 +244,14 @@ def rss(product: str | None = None, prio: str | None = None, kev: int = 0):
         title = f"[{v['priority']}] {v['id']}: {a.get('headline') or v['title']}"
         desc = a.get('summary') or (v['description'] or '')[:800]
         if a.get('action'):
-            desc += '\n\nAction: ' + a['action']
-        items.append(f"<item><title>{xesc(title)}</title><link>{SITE}/vuln/{v['id']}</link><guid isPermaLink=\"true\">{SITE}/vuln/{v['id']}</guid>"
+            desc += '\n\n' + str(_('What to do:')) + ' ' + a['action']
+        items.append(f"<item><title>{xesc(title)}</title><link>{site}/vuln/{v['id']}</link><guid isPermaLink=\"true\">{site}/vuln/{v['id']}</guid>"
                      f"<pubDate>{format_datetime(datetime.fromtimestamp(v['feed_ts'], timezone.utc))}</pubDate>"
                      f"<category>{xesc(prods)}</category><description>{xesc(desc)}</description></item>")
-    name = 'libsec — web stack vulnerabilities' + (f' · {catalog.BY_SLUG[product]["name"]}' if product in catalog.BY_SLUG else '')
+    name = f'{i18n.BRAND} — ' + str(_('web stack vulnerabilities')) + (f' · {catalog.BY_SLUG[product]["name"]}' if product in catalog.BY_SLUG else '')
     body = ('<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>'
-            f'<title>{xesc(name)}</title><link>{SITE}/</link><description>New vulnerabilities in PHP, Python, MySQL, nginx, Apache and other web-server software</description>'
-            f'<atom:link href="{SITE}/feed.xml" rel="self" type="application/rss+xml"/><language>en</language>' + ''.join(items) + '</channel></rss>')
+            f'<title>{xesc(name)}</title><link>{site}/</link><description>{xesc(str(_("New vulnerabilities in PHP, Python, MySQL, nginx, Apache and other web-server software")))}</description>'
+            f'<atom:link href="{site}/feed.xml" rel="self" type="application/rss+xml"/><language>{LANGS[L]["hreflang"]}</language>' + ''.join(items) + '</channel></rss>')
     return Response(body, media_type='application/rss+xml; charset=utf-8')
 
 
@@ -244,12 +302,40 @@ def api_products():
 
 
 @app.get('/robots.txt', response_class=PlainTextResponse)
-def robots():
-    return 'User-agent: *\nDisallow: /\n'
+def robots(request: Request):
+    return f'User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: {origin(lang_of(request))}/sitemap.xml\n'
+
+
+@app.get('/sitemap.xml')
+def sitemap(request: Request):
+    """Sitemap своего поддомена с xhtml:link на все языковые версии каждой страницы."""
+    L = lang_of(request)
+    c = db()
+    pages = [('/', None, LANGS), ('/products', None, LANGS), ('/about', None, LANGS)]
+    last = {r[0]: r[1] for r in c.execute('select p.product, max(v.modified) from vuln_products p join vulns v on v.id=p.vuln_id where v.relevant=1 group by p.product')}
+    pages += [(f'/product/{p["slug"]}', last.get(p['slug']), LANGS) for p in catalog.P]
+    an = {r[0]: i18n.tr_hash(loads(r[1])) for r in c.execute('select vuln_id, data from analysis where data is not null')}
+    tr = {}
+    for vid, lang, ih in c.execute('select vuln_id, lang, input_hash from analysis_tr where data is not null'):
+        if an.get(vid) == ih:
+            tr.setdefault(vid, []).append(lang)
+    for vid, mod in c.execute('select id, modified from vulns where relevant=1 order by feed_ts desc'):
+        langs = [i18n.DEFAULT] + tr.get(vid, [])
+        if L in langs:
+            pages.append((f'/vuln/{vid}', mod, langs))
+    out = ['<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">']
+    for path, mod, langs in pages:
+        out.append(f'<url><loc>{xesc(origin(L) + path)}</loc>' + (f'<lastmod>{fmt_date(mod)}</lastmod>' if mod else ''))
+        if len(langs) > 1:
+            out += [f'<xhtml:link rel="alternate" hreflang="{LANGS[l]["hreflang"]}" href="{xesc(origin(l) + path)}"/>' for l in LANGS if l in langs]
+            out.append(f'<xhtml:link rel="alternate" hreflang="x-default" href="{xesc(origin(i18n.DEFAULT) + path)}"/>')
+        out.append('</url>')
+    out.append('</urlset>')
+    return Response('\n'.join(out), media_type='application/xml; charset=utf-8')
 
 
 @app.exception_handler(404)
 def nf(request: Request, exc):
     if request.url.path.startswith('/api/'):
         return JSONResponse({'detail': 'not found'}, status_code=404)
-    return tpl.TemplateResponse(request, 'base.html', {'notfound': True}, status_code=404)
+    return render(request, 'base.html', {'notfound': True}, index=False, status=404)

@@ -1,11 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Tracked products — libsec{% endblock %}
+{% block title %}{{ _('Tracked products') }} — {{ BRAND }}{% endblock %}
+{% block desc %}{{ _('{n} web-stack products tracked for security vulnerabilities: languages, web servers, databases, crypto libraries, containers, frameworks and CMS.', n=catalog.P|length) }}{% endblock %}
 {% block main %}
-<h1>Tracked products</h1>
-<p class="sub">{{ catalog.P|length }} products. Each is matched by CNA vendor/product names, CPE, distro package names and OSV package coordinates. Count = items in the 45-day feed / all known.</p>
+<h1>{{ _('Tracked products') }}</h1>
+<p class="sub">{{ _('{n} products. Each is matched by CNA vendor/product names, CPE, distro package names and OSV package coordinates. Count = items in the 45-day feed / all known.', n=catalog.P|length) }}</p>
 {% for ck, cname in CATS.items() %}
 <div class="cat">
-  <h2>{{ cname }}</h2>
+  <h2>{{ _(cname) }}</h2>
   <div class="plist">
   {% for p in catalog.P if p.cat == ck %}{% set s = st.get(p.slug) %}
     <a href="/product/{{ p.slug }}">{{ p.name }}<span>{{ (s.listed or 0) if s else 0 }} / {{ s.total if s else 0 }}{% if s and s.kev %} · {{ s.kev }} KEV{% endif %}</span></a>

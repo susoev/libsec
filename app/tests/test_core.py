@@ -40,6 +40,33 @@ def test_osv_ranges():
     assert f['affected'][0]['ranges'] == ['>= 5.0, < 5.0.9'] and f['affected'][0]['fixed'] == ['5.0.9']
 
 
+def test_i18n():
+    """Все строки интерфейса переведены на все языки, плейсхолдеры и теги на месте; язык по Host."""
+    import json, re, subprocess, sys
+    from pathlib import Path
+    from libsec import i18n
+    root = Path(__file__).resolve().parents[2]
+    keys = json.loads(subprocess.check_output([sys.executable, str(root / 'tools/i18n_keys.py')]))
+    marks = lambda s: sorted(re.findall(r'\{\w+\}|<[^>]+>', s))
+    for l in i18n.TR_LANGS:
+        d = i18n.T[l]
+        miss = [k for k in keys if k not in d]
+        assert not miss, (l, miss[:3])
+        bad = [k for k in keys if marks(d[k]) != marks(k)]
+        assert not bad, (l, bad[:3])
+    assert i18n.host_lang('ru.websec.in') == 'ru' and i18n.host_lang('websec.in') == 'en' and i18n.host_lang('xx.websec.in') == 'en'
+    assert str(i18n.gettext('de')('{n} min ago', n=5)).startswith('vor 5')
+    assert str(i18n.reason('CVSS 9.8 critical; EPSS 97%', 'ru')).startswith('CVSS 9.8 ')
+
+
+def test_tr_ok():
+    from libsec.ai import tr_ok
+    src = {'summary': 'Fixed in 1.2.3 and 2.0.', 'preconditions': ['a', 'b']}
+    assert tr_ok(src, {'summary': 'Corregido en 1.2.3 y 2.0.', 'preconditions': ['x', 'y']})
+    assert not tr_ok(src, {'summary': 'Corregido en 1.2.4 y 2.0.', 'preconditions': ['x', 'y']})
+    assert not tr_ok(src, {'summary': 'Corregido en 1.2.3 y 2.0.', 'preconditions': ['x']})
+
+
 if __name__ == '__main__':
     for k, fn in list(globals().items()):
         if k.startswith('test_'):

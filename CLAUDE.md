@@ -5,7 +5,8 @@
 - Воркер: юнит `libsec-worker` (`python -m libsec.worker`), лог `logs/worker.log`. Один проход: `cd app && ~/venvs/libsec/bin/python -m libsec.worker once [источник…]`. После правки каталога или парсеров: остановить воркер, `… -m libsec.worker reparse`, запустить воркер.
 - БД: `data/libsec.db` (SQLite). Сайт открывает её только на чтение, пишет только воркер.
 - Интервалы источников: таблица `sources.interval_sec`, работает без деплоя. Состояние источников: https://websec.in/status.
-- ИИ: `libsec-ai.timer` раз в 10 минут запускает `python -m libsec.ai` (лог `logs/ai.log`, очередь: `… -m libsec.ai --status`). Он будит локальный `claude -p` на пачку до 8 свежих записей и завершается. Лимит — 6 пачек в час.
+- ИИ: `libsec-ai.timer` раз в 10 минут запускает `python -m libsec.ai` (лог `logs/ai.log`, очередь: `… -m libsec.ai --status`). Он будит локальный `claude -p` на пачку до 8 свежих записей, затем переводит готовые разборы, и завершается. Лимит — 6 пачек разбора и 8 вызовов перевода в час.
+- Языки: английский на websec.in, переводы на поддоменах `es pt fr de ru zh ja` (язык по Host, `app/libsec/i18n.py`). Строки интерфейса — `app/i18n/<lang>.json`; после добавления `_('…')` в шаблоны: `python3 tools/i18n_gen.py es pt fr de ru zh ja`. ИИ-разборы переводит `libsec.ai` (таблица `analysis_tr`). Подробности — `docs/decisions.md`.
 - TG: пока не задан канал (`LIBSEC_TG_CHAT` в `deploy/libsec-worker.service`), посты идут в топик Sec, не больше 3 в сутки.
 - Тесты: `cd app && ~/venvs/libsec/bin/python -m tests.test_core`.
 

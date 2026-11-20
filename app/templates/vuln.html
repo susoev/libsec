@@ -1,67 +1,90 @@
 {% extends "base.html" %}
-{% block title %}{{ v.id }}: {{ (an.headline if an else v.title)|e }} — libsec{% endblock %}
-{% block desc %}{{ ((an.summary if an else v.description) or '')[:200] }}{% endblock %}
+{% block title %}{{ v.id }}: {{ head }} — {{ BRAND }}{% endblock %}
+{% block desc %}{{ ((an.summary if an else v.description) or '')[:300] }}{% endblock %}
+{% block ogtype %}article{% endblock %}
+{% block head %}
+<script type="application/ld+json">{{ {"@context": "https://schema.org", "@graph": [
+  {"@type": "TechArticle", "headline": (v.id ~ ": " ~ (head or ''))[:110], "inLanguage": LANGS[L].hreflang, "url": canonical,
+   "datePublished": v.published|date('%Y-%m-%dT%H:%M:%SZ'), "dateModified": v.modified|date('%Y-%m-%dT%H:%M:%SZ'),
+   "description": ((an.summary if an else v.description) or '')[:300],
+   "about": soft(prods),
+   "identifier": v.id, "publisher": {"@type": "Organization", "name": BRAND, "url": SITE ~ "/"}},
+  {"@type": "BreadcrumbList", "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": BRAND, "item": ORIGIN ~ "/"}] +
+    ([{"@type": "ListItem", "position": 2, "name": catalog.BY_SLUG[prods[0]].name, "item": ORIGIN ~ "/product/" ~ prods[0]}] if prods else []) +
+    [{"@type": "ListItem", "position": 3 if prods else 2, "name": v.id, "item": ORIGIN ~ "/vuln/" ~ v.id}]}
+]}|tojson }}</script>
+{% endblock %}
+{% block crumbs %}<nav class="crumbs"><a href="/">{{ BRAND }}</a>{% if prods %} › <a href="/product/{{ prods[0] }}">{{ _('{name} vulnerabilities', name=catalog.BY_SLUG[prods[0]].name) }}</a>{% endif %} › {{ v.id }}</nav>{% endblock %}
 {% block main %}
 <div class="card" style="border:0;background:none;padding:0">
   <div class="top">
-    <span class="badge p-{{ v.priority }}">{{ v.priority|lower }}</span>
-    {% if v.kev %}<span class="badge kev">exploited in the wild</span>{% endif %}
-    {% for p in v.products|loads %}{% if p in catalog.BY_SLUG %}<a class="tag" href="/product/{{ p }}">{{ catalog.BY_SLUG[p].name }}</a>{% endif %}{% endfor %}
+    <span class="badge p-{{ v.priority }}">{{ _(v.priority|lower) }}</span>
+    {% if v.kev %}<span class="badge kev">{{ _('exploited in the wild') }}</span>{% endif %}
+    {% for p in prods %}<a class="tag" href="/product/{{ p }}">{{ catalog.BY_SLUG[p].name }}</a>{% endfor %}
     {% if v.state != 'PUBLISHED' %}<span class="badge p-UNRATED">{{ v.state|lower }}</span>{% endif %}
   </div>
 </div>
-<h1><span class="mono">{{ v.id }}</span><br>{{ an.headline if an and an.headline else v.title }}</h1>
-<p class="sub">Published {{ v.published|date }} · updated {{ v.modified|date }}{% if v.aliases|loads %} · also known as {% for a in v.aliases|loads %}<span class="mono">{{ a }}</span>{{ ', ' if not loop.last }}{% endfor %}{% endif %}</p>
+<h1><span class="mono">{{ v.id }}</span><br>{{ head }}</h1>
+<p class="sub">{{ _('Published {a} · updated {b}', a=v.published|date, b=v.modified|date) }}{% if v.aliases|loads %} · {{ _('also known as') }} {% for a in v.aliases|loads %}<span class="mono">{{ a }}</span>{{ ', ' if not loop.last }}{% endfor %}{% endif %}</p>
 
 <div class="grid">
-  <div class="kv"><small>Priority (libsec rule)</small><b>{{ v.priority|lower }}</b><div class="note">{{ v.priority_reason }}</div></div>
-  <div class="kv"><small>CVSS{% if v.cvss_version %} {{ v.cvss_version }}{% endif %}{% if v.cvss_source %} · {{ v.cvss_source }}{% endif %}</small><b>{{ v.cvss_score if v.cvss_score is not none else (v.cvss_severity|lower if v.cvss_severity else '—') }}</b>{% if v.cvss_vector %}<div class="note mono" style="word-break:break-all">{{ v.cvss_vector }}</div>{% endif %}</div>
-  <div class="kv"><small>EPSS (exploit probability, 30 d)</small><b>{{ '%.2f'|format(v.epss * 100) ~ '%' if v.epss is not none else '—' }}</b>{% if v.epss_pct is not none %}<div class="note">percentile {{ '%.0f'|format(v.epss_pct * 100) }} · {{ v.epss_date }}</div>{% endif %}</div>
-  <div class="kv"><small>CISA KEV</small><b>{{ 'yes' if v.kev else 'no' }}</b>{% if v.kev %}<div class="note">added {{ v.kev_added|date }} · due {{ v.kev_due|date }}{% if v.kev_ransom == 'Known' %} · used by ransomware{% endif %}</div>{% endif %}</div>
+  <div class="kv"><small>{{ _('Priority (our rule)') }}</small><b>{{ _(v.priority|lower) }}</b><div class="note">{{ v.priority_reason|reason }}</div></div>
+  <div class="kv"><small>CVSS{% if v.cvss_version %} {{ v.cvss_version }}{% endif %}{% if v.cvss_source %} · {{ v.cvss_source }}{% endif %}</small><b>{{ v.cvss_score if v.cvss_score is not none else (_(v.cvss_severity|lower) if v.cvss_severity else '—') }}</b>{% if v.cvss_vector %}<div class="note mono" style="word-break:break-all">{{ v.cvss_vector }}</div>{% endif %}</div>
+  <div class="kv"><small>{{ _('EPSS (exploit probability, 30 d)') }}</small><b>{{ '%.2f'|format(v.epss * 100) ~ '%' if v.epss is not none else '—' }}</b>{% if v.epss_pct is not none %}<div class="note">{{ _('percentile {n}', n='%.0f'|format(v.epss_pct * 100)) }} · {{ v.epss_date }}</div>{% endif %}</div>
+  <div class="kv"><small>CISA KEV</small><b>{{ _('yes') if v.kev else _('no') }}</b>{% if v.kev %}<div class="note">{{ _('added {a} · due {b}', a=v.kev_added|date, b=v.kev_due|date) }}{% if v.kev_ransom == 'Known' %} · {{ _('used by ransomware') }}{% endif %}</div>{% endif %}</div>
 </div>
 
 {% if an %}
-<h2>Analysis <span class="badge ai">AI</span></h2>
+<h2>{{ _('Analysis') }} <span class="badge ai">AI</span></h2>
 <div class="box">
   <p>{{ an.summary }}</p>
-  {% if an.affects %}<p><b>Affected:</b> {{ an.affects }}</p>{% endif %}
-  {% if an.preconditions %}<p><b>Preconditions:</b></p><ul>{% for x in an.preconditions %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
-  <p><b>What to do:</b> {{ an.action }}</p>
-  <p><b>Our assessment for a typical web server:</b> {{ an.our_score }} — {{ an.score_reasoning }}
-    <span class="note">(attack vector: {{ an.attack_vector }}, auth: {{ an.auth_required }}, type: {{ an.vuln_type }}, typical server exposure: {{ an.typical_server_impact }})</span></p>
-  <p class="note">Generated by {{ an_row.model }} on {{ an_row.created|date }} strictly from the facts below; fixed versions are checked against source data{% if an._dropped %} (dropped unverified: {{ an._dropped|join(', ') }}){% endif %}. CVSS/EPSS/KEV are shown as published by their sources, not by AI.</p>
+  {% if an.affects %}<p><b>{{ _('Affected:') }}</b> {{ an.affects }}</p>{% endif %}
+  {% if an.preconditions %}<p><b>{{ _('Preconditions:') }}</b></p><ul>{% for x in an.preconditions %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  <p><b>{{ _('What to do:') }}</b> {{ an.action }}</p>
+  <p><b>{{ _('Our assessment for a typical web server:') }}</b> {{ _(an.our_score) }} — {{ an.score_reasoning }}
+    <span class="note">({{ _('attack vector') }}: {{ _(an.attack_vector) }}, {{ _('auth') }}: {{ _(an.auth_required) }}, {{ _('type') }}: {{ an.vuln_type }}, {{ _('typical server exposure') }}: {{ _(an.typical_server_impact) }})</span></p>
+  <p class="note">{{ _('Generated by {m} on {d} strictly from the facts below; fixed versions are checked against source data.', m=an_row.model, d=an_row.created|date) }}{% if an._dropped %} ({{ _('dropped unverified:') }} {{ an._dropped|join(', ') }}){% endif %}
+  {% if an._tr %}{{ _('Machine-translated from the English original.') }} <a href="{{ SITE }}/vuln/{{ v.id }}" hreflang="en" lang="en">English</a>.{% endif %}
+  {{ _('CVSS/EPSS/KEV are shown as published by their sources, not by AI.') }}</p>
 </div>
 {% endif %}
 
-<h2>Description</h2>
-<div class="desc">{{ v.description }}</div>
+<h2>{{ _('Description') }}{% if L != 'en' %} <span class="note">({{ _('original, English') }})</span>{% endif %}</h2>
+<div class="desc" lang="en">{{ v.description }}</div>
 
 {% set aff = v.affected|loads %}
 {% if aff %}
-<h2>Affected versions</h2>
+<h2>{{ _('Affected versions') }}</h2>
 <div class="tbl"><table>
-  <tr><th>Product / package</th><th>Affected</th><th>Fixed in</th><th>Source</th></tr>
+  <tr><th>{{ _('Product / package') }}</th><th>{{ _('Affected') }}</th><th>{{ _('Fixed in') }}</th><th>{{ _('Source') }}</th></tr>
   {% for a in aff if a.product %}
-  <tr><td>{{ catalog.BY_SLUG[a.product].name if a.product in catalog.BY_SLUG }}{% if a.package or a.name %}<br><span class="note mono">{{ (a.ecosystem ~ ':' if a.ecosystem) }}{{ a.package or a.name }}</span>{% endif %}</td>
+  <tr><td>{% if a.product in catalog.BY_SLUG %}<a href="/product/{{ a.product }}">{{ catalog.BY_SLUG[a.product].name }}</a>{% endif %}{% if a.package or a.name %}<br><span class="note mono">{{ (a.ecosystem ~ ':' if a.ecosystem) }}{{ a.package or a.name }}</span>{% endif %}</td>
       <td class="mono">{{ (a.ranges or ['—'])|join('; ') }}</td><td class="mono">{{ (a.fixed or ['—'])|join(', ') }}</td><td>{{ a.by }}</td></tr>
   {% endfor %}
 </table></div>
 {% endif %}
 
-{% if v.kev_action %}<h2>CISA required action</h2><p>{{ v.kev_action }}</p>{% endif %}
+{% if v.kev_action %}<h2>{{ _('CISA required action') }}</h2><p lang="en">{{ v.kev_action }}</p>{% endif %}
 
-<h2>Timeline</h2>
+<h2>{{ _('Timeline') }}</h2>
 <div class="tbl"><table>
   {% for e in events %}{% set d = e.data|loads %}
   <tr><td style="width:120px">{{ e.ts|date }}</td><td>
-    {% if e.type == 'published' %}Published{% elif e.type == 'scored' %}CVSS {{ d.score }} ({{ d.severity|lower }}) by {{ d.by }}{% elif e.type == 'kev' %}<b>Added to CISA KEV</b> — exploited in the wild{% elif e.type == 'fix' %}Fix: {{ catalog.BY_SLUG[d.product].name if d.product in catalog.BY_SLUG }} {{ d.package or '' }} <span class="mono">{{ d.version }}</span>{% elif e.type == 'epss_high' %}EPSS above 10% ({{ '%.1f'|format(d.epss * 100) }}%){% else %}{{ e.type }}{% endif %}
+    {% if e.type == 'published' %}{{ _('Published') }}{% elif e.type == 'scored' %}{{ _('CVSS {s} ({sev}) by {by}', s=d.score, sev=_((d.severity or '')|lower), by=d.by) }}{% elif e.type == 'kev' %}<b>{{ _('Added to CISA KEV') }}</b> — {{ _('exploited in the wild') }}{% elif e.type == 'fix' %}{{ _('Fix:') }} {{ catalog.BY_SLUG[d.product].name if d.product in catalog.BY_SLUG }} {{ d.package or '' }} <span class="mono">{{ d.version }}</span>{% elif e.type == 'epss_high' %}{{ _('EPSS above 10% ({n}%)', n='%.1f'|format(d.epss * 100)) }}{% else %}{{ e.type }}{% endif %}
   </td></tr>
   {% endfor %}
 </table></div>
 
-<h2>References</h2>
+<h2>{{ _('References') }}</h2>
 <ul class="refs">{% for r in v.refs|loads %}<li><a href="{{ r.url }}" rel="nofollow noopener">{{ r.url }}</a> {% if r.tags %}<span class="note">{{ r.tags|join(', ') }}</span>{% endif %}</li>{% endfor %}</ul>
 
-<h2>Sources</h2>
-<p class="note">{% for s in sources %}{{ s.source }} <span class="mono">{{ s.external_id }}</span> ({{ s.updated|date }}){{ ' · ' if not loop.last }}{% endfor %} · <a href="/api/v1/vulns/{{ v.id }}">JSON</a></p>
+<h2>{{ _('Sources') }}</h2>
+<p class="note">{% for s in sources %}{{ s.source }} <span class="mono">{{ s.external_id }}</span> ({{ s.updated|date }}){{ ' · ' if not loop.last }}{% endfor %} · <a href="/api/v1/vulns/{{ v.id }}" rel="nofollow">JSON</a></p>
+
+{% for p, rr in related %}
+<h2>{{ _('More {name} vulnerabilities', name=p.name) }}</h2>
+<ul class="related">{% for r, ra in rr %}<li><span class="badge p-{{ r.priority }}">{{ _(r.priority|lower) }}</span> <a href="/vuln/{{ r.id }}"><span class="mono">{{ r.id }}</span> {{ ((ra.headline if ra and ra.headline else r.title) or '')|truncate(100) }}</a></li>{% endfor %}</ul>
+<p class="note"><a href="/product/{{ p.slug }}">{{ _('All {name} vulnerabilities', name=p.name) }} →</a></p>
+{% endfor %}
 {% endblock %}

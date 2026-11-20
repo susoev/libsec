@@ -8,9 +8,13 @@
 Лимит: не больше MAX_BATCHES пачек за запуск и BATCHES_PER_HOUR в час (бережём подписку).
 Кэш: analysis(vuln_id, input_hash) — повторный разбор только при изменении фактов.
 Защита от выдумок: исправленные версии из ответа сверяются кодом с источниками (verify), ссылки — только из входных refs.
+
+Переводы (translate): после разбора тот же запуск переводит готовые английские разборы на языки поддоменов
+(i18n.TR_LANGS): один вызов claude -p = один язык × до TR_BATCH записей, не больше TR_PER_HOUR вызовов в час.
+Кэш analysis_tr(vuln_id, lang, input_hash=i18n.tr_hash(английский разбор)); перевод без всех чисел/версий оригинала отбрасывается.
 """
 import fcntl, json, logging, os, re, subprocess, sys, time
-from . import catalog
+from . import catalog, i18n
 from .db import DATA, connect, dumps, loads
 from .pipeline import h
 
@@ -22,6 +26,12 @@ BATCHES_PER_HOUR = int(os.environ.get('LIBSEC_AI_PER_HOUR', '6'))
 FRESH_DAYS = int(os.environ.get('LIBSEC_AI_FRESH_DAYS', '7'))
 TIMEOUT = 1200
 PROMPT_VERSION = 4
+TR_BATCH = int(os.environ.get('LIBSEC_TR_BATCH', '10'))
+TR_MAX_CALLS = int(os.environ.get('LIBSEC_TR_MAX_CALLS', '3'))
+TR_PER_HOUR = int(os.environ.get('LIBSEC_TR_PER_HOUR', '8'))
+TR_MODEL = os.environ.get('LIBSEC_TR_MODEL', 'sonnet')
+TR_NAMES = {'es': 'Spanish', 'pt': 'Portuguese (Brazilian)', 'fr': 'French', 'de': 'German', 'ru': 'Russian',
+            'zh': 'Simplified Chinese', 'ja': 'Japanese'}
 
 SCHEMA = {
     'type': 'object',
@@ -95,6 +105,21 @@ def verify(out, fin):
     return out
 
 
+def claude(prompt, model=None):
+    """claude -p без инструментов и настроек -> JSON-объект из ответа."""
+    env = {**os.environ, 'SEC_TG': '0', 'LIBSEC_JOB': '1'}
+    p = subprocess.run([CLI, '-p', '--output-format', 'json', '--tools', '', '--setting-sources', '', '--strict-mcp-config',
+                        '--no-session-persistence'] + (['--model', model] if model else []),
+                       input=prompt, capture_output=True, text=True, timeout=TIMEOUT, env=env, cwd='/tmp')
+    if p.returncode:
+        raise RuntimeError(f'claude -p rc={p.returncode}: {(p.stderr or p.stdout)[-300:]}')
+    res = json.loads(p.stdout)
+    if res.get('is_error'):
+        raise RuntimeError(f"claude -p: {str(res.get('result'))[:300]}")
+    text = re.sub(r'^```(json)?|```$', '', res.get('result', '').strip()).strip()
+    return json.loads(text[text.find('{'):text.rfind('}') + 1])
+
+
 def call_cli(batch):
     """batch: [(vuln_id, facts)] -> {vuln_id: анализ}. Один запуск claude -p на всю пачку."""
     items_schema = {'type': 'object', 'properties': {'items': {'type': 'array', 'items': {
@@ -103,16 +128,7 @@ def call_cli(batch):
     prompt = (SYSTEM + f'\n\nYou get {len(batch)} vulnerabilities. Analyze each one independently, using only its own facts.'
               '\nReturn ONLY a JSON object (no prose, no code fences) matching this JSON Schema, one item per input id:\n'
               + json.dumps(items_schema) + '\n\nInput (JSON):\n' + dumps([{'id': vid, 'facts': f} for vid, f in batch]))
-    env = {**os.environ, 'SEC_TG': '0', 'LIBSEC_JOB': '1'}
-    p = subprocess.run([CLI, '-p', '--output-format', 'json', '--tools', '', '--setting-sources', '', '--strict-mcp-config',
-                        '--no-session-persistence'], input=prompt, capture_output=True, text=True, timeout=TIMEOUT, env=env, cwd='/tmp')
-    if p.returncode:
-        raise RuntimeError(f'claude -p rc={p.returncode}: {(p.stderr or p.stdout)[-300:]}')
-    res = json.loads(p.stdout)
-    if res.get('is_error'):
-        raise RuntimeError(f"claude -p: {str(res.get('result'))[:300]}")
-    text = re.sub(r'^```(json)?|```$', '', res.get('result', '').strip()).strip()
-    data = json.loads(text[text.find('{'):text.rfind('}') + 1])
+    data = claude(prompt)
     out = {}
     want = {vid for vid, _ in batch}
     for it in data.get('items') or []:
@@ -174,6 +190,83 @@ def run(c):
     return n
 
 
+# ---------- переводы
+NUM = re.compile(r'\d+(?:[.\-]\d+)*[a-z]?\d*', re.I)
+
+
+def tr_ok(src, out):
+    """Перевод годится: те же поля и типы, все числа/версии оригинала на месте."""
+    for k, v in src.items():
+        o = out.get(k)
+        if isinstance(v, list):
+            if not isinstance(o, list) or len(o) != len(v) or not all(isinstance(x, str) and x.strip() for x in o):
+                return False
+        elif not isinstance(o, str) or not o.strip():
+            return False
+    blob = json.dumps(out, ensure_ascii=False)
+    return all(n in blob for n in NUM.findall(json.dumps(src, ensure_ascii=False)))
+
+
+def tr_pending(c, lang, limit):
+    rows = c.execute('select a.vuln_id, a.data, t.input_hash th, t.error te, t.created tc from analysis a join vulns v on v.id=a.vuln_id'
+                     ' left join analysis_tr t on t.vuln_id=a.vuln_id and t.lang=? where a.data is not null'
+                     " order by (v.priority in ('CRITICAL','HIGH') or v.kev) desc, v.feed_ts desc", (lang,)).fetchall()
+    todo = []
+    for r in rows:
+        an = loads(r['data'])
+        ih = i18n.tr_hash(an)
+        if r['th'] == ih and (not r['te'] or time.time() - (r['tc'] or 0) < 3600 * 6):
+            continue
+        todo.append((r['vuln_id'], i18n.tr_source(an), ih))
+        if len(todo) >= limit:
+            break
+    return todo
+
+
+def translate(c):
+    """Перевести готовые разборы: до TR_MAX_CALLS вызовов, язык с самой длинной очередью первым. -> число переводов."""
+    if not enabled():
+        return 0
+    done_h = c.execute('select count(distinct created) from analysis_tr where created>?', (time.time() - 3600,)).fetchone()[0]
+    n = 0
+    for _ in range(min(TR_MAX_CALLS, max(0, TR_PER_HOUR - done_h))):
+        queues = {l: tr_pending(c, l, TR_BATCH) for l in i18n.TR_LANGS}
+        lang = max(queues, key=lambda l: len(queues[l]))
+        todo = queues[lang]
+        if not todo:
+            break
+        prompt = (f'Translate these vulnerability advisories from English to {TR_NAMES[lang]} for system administrators.\n'
+                  'Rules: translate meaning precisely, use established security terminology of that language; keep unchanged: product and package names, '
+                  'versions, numbers, CVE/GHSA ids, code, config directives, HTTP headers, file paths, URLs, CVSS/EPSS/KEV. '
+                  'Keep every field and the same number of list items. Do not add or drop information.\n'
+                  'Return ONLY a JSON object {"items": [{"id": ..., <same fields translated>}]}, no prose, no code fences.\n\n'
+                  + dumps({'items': [{'id': vid, **src} for vid, src, _ in todo]}))
+        t0 = time.time()
+        try:
+            got = {it.pop('id', None): it for it in claude(prompt, TR_MODEL).get('items') or [] if isinstance(it, dict)}
+            err = 'нет в ответе или не прошёл проверку'
+        except Exception as e:  # noqa: BLE001
+            log.warning('перевод %s: %s', lang, e)
+            got, err = {}, str(e)[:500]
+        stamp = time.time()
+        ok = 0
+        for vid, src, ih in todo:
+            out = {k: got[vid][k] for k in src if k in got.get(vid, {})} if vid in got else None
+            if out and tr_ok(src, out):
+                c.execute('insert or replace into analysis_tr(vuln_id,lang,input_hash,data,created,error) values(?,?,?,?,?,null)',
+                          (vid, lang, ih, dumps(out), stamp))
+                ok += 1
+            else:
+                c.execute('insert or replace into analysis_tr(vuln_id,lang,input_hash,data,created,error) values(?,?,?,null,?,?)',
+                          (vid, lang, ih, stamp, err))
+        c.commit()
+        n += ok
+        log.info('перевод %s: %d/%d за %.0fs', lang, ok, len(todo), time.time() - t0)
+        if not ok:
+            break
+    return n
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(levelname)s %(message)s')
     lk = open(DATA / 'ai.lock', 'w')
@@ -183,11 +276,16 @@ def main():
         return log.info('уже идёт')
     c = connect()
     if '--status' in sys.argv:
-        print(len(pending(c, 10000)), 'в очереди')
+        print(len(pending(c, 10000)), 'в очереди на разбор')
+        print('переводы в очереди:', ', '.join(f'{l} {len(tr_pending(c, l, 100000))}' for l in i18n.TR_LANGS))
         return
     n = run(c)
     if n:
         log.info('разобрано %d', n)
+    if '--no-tr' not in sys.argv:
+        t = translate(c)
+        if t:
+            log.info('переведено %d', t)
 
 
 if __name__ == '__main__':

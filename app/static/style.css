@@ -45,3 +45,10 @@ tr:last-child td{border-bottom:0}
 .ok{color:var(--low)}.bad{color:var(--crit)}
 footer{border-top:1px solid var(--line);padding:18px 0 30px;color:var(--mute);font-size:13px}
 @media (max-width:600px){h1{font-size:20px}.filters form{margin-left:0;width:100%}.filters input{flex:1}}
+.langs{position:relative;margin-left:auto;font-size:14px}.langs summary{cursor:pointer;color:var(--mute);list-style:none}.langs summary::after{content:" ▾"}
+.langs>div{position:absolute;right:0;top:26px;z-index:5;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 0;min-width:140px;box-shadow:0 6px 20px rgba(0,0,0,.12)}
+.langs>div a{display:block;padding:5px 14px;color:var(--ink)}.langs>div a.on{font-weight:600}
+.crumbs{font-size:13px;color:var(--mute);margin:0 0 10px}
+.plinks{font-size:14px;line-height:1.9}
+.related{padding-left:0;list-style:none}.related li{margin:0 0 6px;font-size:14px}
+footer p{margin:0 0 8px}.langlist a,.langlist b{white-space:nowrap}
