@@ -40,7 +40,7 @@ def origin(lang):
 def gettext(lang):
     d = T.get(lang, {})
 
-    def _(s, **kw):
+    def _(s, /, **kw):
         m = Markup(d.get(s) or s)  # строки наши, из словаря: разметка доверенная
         return m.format(**kw) if kw else m  # Markup.format экранирует подставляемые значения
     return _
