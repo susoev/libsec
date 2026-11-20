@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""Stop-хук ( .claude/settings.json ): финальный ответ сессии -> топик Sec с припиской sid.
+
+stdin — JSON события Stop: session_id, transcript_path, cwd, stop_hook_active.
+- Ответ на сообщение из Telegram ( data/pending/<sid>.json кладёт диспетчер ) уходит reply на него.
+- Запрос из консоли: сверху цитата запроса, чтобы в чате было понятно, на что ответ.
+Отключить для сессии: SEC_TG=0. Никогда не блокирует Claude: любые ошибки — в logs/stop-hook.log.
+"""
+import json, os, sys, time, traceback
+from pathlib import Path
+
+L = Path(__file__).resolve().parent.parent
+LOG = L / 'logs/stop-hook.log'
+
+
+def log(*a):
+    with open(LOG, 'a') as f:
+        f.write(time.strftime('%F %T ') + ' '.join(map(str, a)) + '\n')
+
+
+def is_prompt(e):
+    """Настоящий запрос человека ( не tool_result, не служебная вставка )."""
+    if e.get('type') != 'user' or e.get('isMeta') or e.get('isSidechain'):
+        return False
+    c = e.get('message', {}).get('content')
+    if isinstance(c, str):
+        return not c.startswith('<')
+    return any(b.get('type') == 'text' and not b.get('text', '').startswith('<') for b in c or [])
+
+
+def prompt_text(e):
+    c = e['message']['content']
+    if isinstance(c, str):
+        return c
+    return '\n'.join(b.get('text', '') for b in c if b.get('type') == 'text')
+
+
+def last_turn(path):
+    """-> (текст запроса, финальный текст ответа): текстовые блоки ассистента после последнего tool_result."""
+    rows = []
+    for line in Path(path).read_text().splitlines():
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            pass
+    start = max((i for i, e in enumerate(rows) if is_prompt(e)), default=-1)
+    ask = prompt_text(rows[start]) if start >= 0 else ''
+    tail = []
+    for e in rows[start + 1:]:
+        if e.get('isSidechain'):
+            continue
+        c = e.get('message', {}).get('content')
+        if e.get('type') == 'user' and isinstance(c, list) and any(b.get('type') == 'tool_result' for b in c):
+            tail = []
+        elif e.get('type') == 'assistant' and isinstance(c, list):
+            if any(b.get('type') == 'tool_use' for b in c):
+                tail = []
+            tail += [b['text'] for b in c if b.get('type') == 'text' and b.get('text', '').strip()]
+    return ask, '\n\n'.join(tail).strip()
+
+
+def main():
+    if os.environ.get('SEC_TG') == '0':
+        return
+    ev = json.loads(sys.stdin.read() or '{}')
+    sid, tp = ev.get('session_id', ''), ev.get('transcript_path', '')
+    if not sid or not tp or not Path(tp).exists():
+        return log('skip: нет sid/transcript', sid, tp)
+    ask, answer = last_turn(tp)
+    if not answer:
+        answer = (ev.get('last_assistant_message') or '').strip()
+    if not answer:
+        return log('skip: пустой ответ', sid)
+    from importlib.machinery import SourceFileLoader
+    tg = SourceFileLoader('tg', str(L / 'bin/tg')).load_module()
+    pend = L / 'data/pending' / f'{sid}.json'
+    reply = None
+    if pend.exists():
+        try:
+            reply = json.loads(pend.read_text()).get('reply_to')
+        except (json.JSONDecodeError, OSError):
+            pass
+        pend.unlink(missing_ok=True)
+    import html
+    text = tg.md_to_html(answer)
+    if not reply and ask.strip():
+        q = ' '.join(ask.split())
+        text = '💬 <i>' + html.escape(q[:300] + '…' if len(q) > 300 else q, quote=False) + '</i>\n\n' + text
+    ids = tg.send(text, sid=sid, reply=reply, is_html=True)
+    log('sent', sid, ids, 'reply' if reply else 'console', len(answer))
+
+
+try:
+    main()
+except SystemExit as e:
+    log('fail', e)
+except Exception:
+    log('error', traceback.format_exc())

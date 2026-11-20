@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Сообщение в топик Sec от бота tgbridge.
+
+  tg 'текст'                      отправить (Markdown -> HTML Telegram)
+  tg -S <session_id> 'текст'      с припиской сессии: reply на это сообщение разбудит её
+  tg -r 123 'текст'               ответом на сообщение 123
+  tg --html 'текст'               текст уже в HTML, не конвертировать
+  tg -f файл 'подпись'            файл документом
+  echo текст | tg                 из stdin
+
+Печатает message_id. Каждое отправленное пишется в data/tg.jsonl ( id -> sid ): по нему диспетчер
+понимает, какую сессию будить на reply.
+"""
+import argparse, html, json, re, sys, time, urllib.error, urllib.parse, urllib.request
+from pathlib import Path
+
+L = Path(__file__).resolve().parent.parent
+ENV = dict(l.split('=', 1) for l in (L / '.secrets/tg.env').read_text().split('\n') if '=' in l and not l.startswith('#'))
+TOKEN, CHAT, THREAD = ENV['TG_BOT_TOKEN'].strip(), ENV['TG_CHAT_ID'].strip(), ENV['TG_THREAD_ID'].strip()
+API = f'https://api.telegram.org/bot{TOKEN}/'
+LIMIT = 3900
+
+
+def call(method, data, files=None):
+    if files:
+        b = '----sec' + str(time.time_ns())
+        body = b''
+        for k, v in data.items():
+            body += f'--{b}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()
+        for k, p in files.items():
+            body += (f'--{b}\r\nContent-Disposition: form-data; name="{k}"; filename="{Path(p).name}"\r\n'
+                     'Content-Type: application/octet-stream\r\n\r\n').encode() + Path(p).read_bytes() + b'\r\n'
+        body += f'--{b}--\r\n'.encode()
+        req = urllib.request.Request(API + method, body, {'Content-Type': f'multipart/form-data; boundary={b}'})
+    else:
+        req = urllib.request.Request(API + method, urllib.parse.urlencode(data).encode())
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:
+        return json.loads(e.read() or b'{}')
+    except OSError as e:
+        return {'ok': False, 'description': str(e)}
+
+
+def _inline(s):
+    s = html.escape(s, quote=False)
+    s = re.sub(r'`([^`\n]+)`', r'<code>\1</code>', s)
+    s = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', s)
+    s = re.sub(r'(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])', r'<i>\1</i>', s)
+    s = re.sub(r'\[([^\]]+)\]\((https?://[^)\s]+)\)', r'<a href="\2">\1</a>', s)
+    return s
+
+
+def md_to_html(md):
+    """Минимальный Markdown -> HTML Telegram: код, жирный, курсив, ссылки, заголовки, таблицы в <pre>."""
+    out, buf, mode = [], [], None  # mode: code | table
+    def flush():
+        nonlocal buf, mode
+        if buf:
+            out.append('<pre>' + html.escape('\n'.join(buf), quote=False) + '</pre>')
+        buf, mode = [], None
+    for line in md.split('\n'):
+        if mode == 'code':
+            if line.strip().startswith('```'):
+                flush()
+            else:
+                buf.append(line)
+            continue
+        if line.strip().startswith('```'):
+            flush(); mode = 'code'; continue
+        if line.lstrip().startswith('|'):
+            if mode != 'table':
+                flush(); mode = 'table'
+            if not re.fullmatch(r'\s*\|[\s:|-]+\|\s*', line):
+                buf.append(line.strip())
+            continue
+        if mode == 'table':
+            flush()
+        m = re.match(r'#{1,6}\s+(.*)', line)
+        if m:
+            out.append('<b>' + _inline(m.group(1)) + '</b>')
+        elif re.match(r'\s*[-*]\s+', line):
+            out.append(re.sub(r'^(\s*)[-*]\s+', r'\1• ', _inline(line)))
+        else:
+            out.append(_inline(line))
+    flush()
+    return '\n'.join(out)
+
+
+def parts(text, n=LIMIT):
+    res = []
+    while len(text) > n:
+        cut = text.rfind('\n\n', 0, n)
+        cut = cut if cut > n // 2 else text.rfind('\n', 0, n)
+        cut = cut if cut > n // 2 else n
+        res.append(text[:cut])
+        text = text[cut:].lstrip('\n')
+    return res + [text] if text.strip() else res
+
+
+def log_sent(ids, sid, kind, text):
+    with open(L / 'data/tg.jsonl', 'a') as f:
+        for i in ids:
+            f.write(json.dumps({'id': i, 'ts': int(time.time()), 'sid': sid, 'kind': kind, 'text': text[:2000]},
+                               ensure_ascii=False) + '\n')
+
+
+def send(text, sid='', reply=None, is_html=False, kind='answer'):
+    body = text.strip() if is_html else md_to_html(text.strip())
+    foot = f'\n\n<code>sid:{sid}</code>' if sid else ''
+    base = {'chat_id': CHAT, 'message_thread_id': THREAD,
+            'link_preview_options': json.dumps({'is_disabled': True})}
+    ids = []
+    chunks = parts(body, LIMIT - len(foot)) or ['(пустой ответ)']
+    for i, p in enumerate(chunks):
+        d = {**base, 'text': p + (foot if i == len(chunks) - 1 else ''), 'parse_mode': 'HTML'}
+        if reply and not i:
+            d['reply_parameters'] = json.dumps({'message_id': reply, 'allow_sending_without_reply': True})
+        r = call('sendMessage', d)
+        if not r.get('ok'):  # битый HTML: без разметки
+            d['parse_mode'] = ''
+            d['text'] = re.sub(r'<[^>]+>', '', d['text'])
+            d['text'] = html.unescape(d['text'])
+            r = call('sendMessage', d)
+        if not r.get('ok'):
+            raise SystemExit(f"tg: {r.get('description')}")
+        ids.append(r['result']['message_id'])
+    log_sent(ids, sid, kind, text)
+    return ids
+
+
+def main():
+    a = argparse.ArgumentParser()
+    a.add_argument('text', nargs='?')
+    a.add_argument('-S', '--sid', default='')
+    a.add_argument('-r', '--reply', type=int)
+    a.add_argument('-f', '--file')
+    a.add_argument('-k', '--kind', default='info')
+    a.add_argument('--html', action='store_true')
+    o = a.parse_args()
+    text = o.text if o.text is not None else ('' if o.file and sys.stdin.isatty() else sys.stdin.read())
+    if o.file:
+        cap = (text if o.html else md_to_html(text or ''))[:900] + (f'\n<code>sid:{o.sid}</code>' if o.sid else '')
+        d = {'chat_id': CHAT, 'message_thread_id': THREAD, 'caption': cap, 'parse_mode': 'HTML'}
+        if o.reply:
+            d['reply_parameters'] = json.dumps({'message_id': o.reply, 'allow_sending_without_reply': True})
+        r = call('sendDocument', d, {'document': o.file})
+        if not r.get('ok'):
+            raise SystemExit(f"tg: {r.get('description')}")
+        ids = [r['result']['message_id']]
+        log_sent(ids, o.sid, 'file', f'{o.file}: {text or ""}')
+    else:
+        ids = send(text, o.sid, o.reply, o.html, o.kind)
+    print(' '.join(map(str, ids)))
+
+
+if __name__ == '__main__':
+    main()

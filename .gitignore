@@ -1,0 +1,9 @@
+# секреты, переписка из Telegram, логи — только на сервере
+.secrets/
+.env
+*.env
+data/
+logs/
+__pycache__/
+*.pyc
+.claude/settings.local.json

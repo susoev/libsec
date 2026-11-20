@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""Диспетчер сообщений топика Sec ( systemd: sec-chat.path -> sec-chat.service, плюс таймер раз в минуту ).
+
+Бот tgbridge кладёт сообщения топика в data/inbox/<ts>-<id>.json. Для каждого:
+1. Копия в data/msgs/<ts>-<id>.md ( архив переписки ), json -> data/inbox.done/.
+2. Какую сессию будить:
+   - reply на сообщение с припиской sid ( data/tg.jsonl или sid:<uuid> в цитате ) -> эту сессию;
+   - без reply ( или reply на сообщение без sid ) -> новую сессию.
+3. Как будить:
+   - сессия открыта в консоли ( ~/.claude/sessions, процесс жив, есть tmux ) -> вставка текста в её tmux-панель;
+     если она занята — сообщение ждёт в data/wait/, таймер повторит;
+   - иначе -> фоновый `claude -p --resume <sid>` ( новая — `--session-id <uuid>` ) в ~/sec, режим auto.
+   Ответ в топик отправляет Stop-хук ( bin/stop-hook ) reply на сообщение владельца.
+   Фоновая сессия уже работает с этим sid -> сообщение ждёт в data/wait/.
+
+  dispatch            разобрать inbox и wait
+  dispatch -n         показать, что бы сделал
+"""
+import fcntl, json, os, re, subprocess, sys, time, uuid
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+L = Path(__file__).resolve().parent.parent
+from importlib.machinery import SourceFileLoader as _SFL  # noqa: E402
+tg = _SFL('tg', str(L / 'bin/tg')).load_module()  # noqa: E402
+
+D = L / 'data'
+INBOX, DONE, WAIT, MSGS, PEND, RUN = D / 'inbox', D / 'inbox.done', D / 'wait', D / 'msgs', D / 'pending', D / 'run'
+CLAUDE = '/home/ubuntu/.local/bin/claude'
+SESS = Path.home() / '.claude/sessions'
+UUID = re.compile(r'sid:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})')
+MSK = ZoneInfo('Europe/Moscow')
+DRY = '-n' in sys.argv
+WAIT_MAX = 6 * 3600  # дольше этого живая сессия занята — будим фоном
+
+
+def log(*a):
+    print(time.strftime('%F %T'), *a, flush=True)
+
+
+def sent_index():
+    idx = {}
+    f = D / 'tg.jsonl'
+    for line in f.read_text().splitlines() if f.exists() else []:
+        try:
+            e = json.loads(line)
+            if e.get('sid'):
+                idx[e['id']] = e['sid']
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return idx
+
+
+def target_sid(m, idx):
+    r = m.get('reply_to') or {}
+    if not r:
+        return None
+    if r.get('id') in idx:
+        return idx[r['id']]
+    hit = UUID.search(r.get('text') or '')
+    return hit.group(1) if hit else None
+
+
+def live_session(sid):
+    """-> dict из ~/.claude/sessions, если интерактивная сессия с этим id жива и сидит в tmux."""
+    for f in SESS.glob('*.json'):
+        try:
+            s = json.loads(f.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        if s.get('sessionId') != sid or s.get('kind') != 'interactive' or not s.get('tmux'):
+            continue
+        try:
+            os.kill(int(s['pid']), 0)
+        except (OSError, ValueError, KeyError):
+            continue
+        return s
+    return None
+
+
+def bg_busy(sid):
+    lk = RUN / f'{sid}.lock'
+    if not lk.exists():
+        return False
+    with open(lk) as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(f, fcntl.LOCK_UN)
+            return False
+        except BlockingIOError:
+            return True
+
+
+def write_md(m, sid, how):
+    t = datetime.fromtimestamp(m['ts'], MSK)
+    r = m.get('reply_to') or {}
+    lines = ['---', f"id: {m['id']}", f'time: {t:%Y-%m-%d %H:%M} МСК', f'voice: {str(bool(m.get("voice"))).lower()}',
+             f"reply_to: {r.get('id', '')}", f'session: {sid or ""}', f'route: {how}', '---', '']
+    if r:
+        lines += ['> ' + (r.get('text') or '(без текста)').replace('\n', '\n> '), '']
+    lines += [m.get('text') or '(без текста)']
+    if m.get('files'):
+        lines += ['', 'Вложения:'] + [f'- {p}' for p in m['files']]
+    p = MSGS / f"{m['ts']}-{m['id']}.md"
+    if not DRY:
+        p.write_text('\n'.join(lines) + '\n')
+    return p
+
+
+def prompt_for(m, md, live=False):
+    r = m.get('reply_to') or {}
+    s = f"[Telegram · топик Sec · сообщение #{m['id']}" + (' · голосовое, распознано' if m.get('voice') else '') + ']'
+    if r and not live:  # в живой сессии контекст и так есть, цитату не дублируем
+        q = (r.get('text') or '').strip()
+        s += f"\nОтвет на #{r['id']}:\n> " + (q[:1500] + '…' if len(q) > 1500 else q).replace('\n', '\n> ')
+    s += '\n\n' + (m.get('text') or '(без текста)')
+    if m.get('files'):
+        s += '\n\nВложения: ' + ', '.join(m['files'])
+    if not live:
+        s += (f'\n\n(Сообщение сохранено в {md}. Твой финальный ответ автоматически уйдёт в топик reply на это сообщение '
+              'с припиской sid — отдельно в Telegram дублировать не нужно. Промежуточное сообщение в долгой задаче: '
+              'bin/tg -S $sid -r <id> "текст". Человека рядом нет: нужен ответ владельца — спроси в итоговом ответе и закончи ход, '
+              'его reply разбудит эту сессию.)')
+    return s
+
+
+def to_tmux(s, text):
+    target = s['tmux'].split(':', 1)[-1].split('.')[-1] if '%' in s['tmux'] else s['tmux']
+    buf = f'sec-{os.getpid()}'
+    subprocess.run(['tmux', 'load-buffer', '-b', buf, '-'], input=text.encode(), check=True)
+    subprocess.run(['tmux', 'paste-buffer', '-p', '-d', '-b', buf, '-t', target], check=True)
+    time.sleep(0.4)
+    subprocess.run(['tmux', 'send-keys', '-t', target, 'Enter'], check=True)
+
+
+def run_bg(sid, prompt, new, msg_id):
+    """Фоновый claude в отдельном процессе ( переживает выход диспетчера: KillMode=process )."""
+    RUN.mkdir(exist_ok=True)
+    out = L / 'logs' / f"job-{datetime.now(MSK):%Y%m%d-%H%M%S}-{msg_id}.log"
+    args = [CLAUDE, '-p', '--permission-mode', 'auto', '--output-format', 'json',
+            *(('--session-id', sid, '-n', f'tg-{msg_id}') if new else ('--resume', sid)), prompt]
+    # flock держит замок сессии, пока claude работает
+    cmd = ['flock', '-n', str(RUN / f'{sid}.lock'), *args]
+    env = {**os.environ, 'HOME': str(Path.home()), 'SEC_JOB': str(msg_id)}
+    with open(out, 'w') as f:
+        subprocess.Popen(cmd, cwd=L, env=env, stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                         start_new_session=True)
+    return out
+
+
+def handle(m, idx, from_wait=False):
+    sid = target_sid(m, idx)
+    new = sid is None
+    if new:
+        sid = str(uuid.uuid4())
+    live = None if new else live_session(sid)
+    how = 'new' if new else ('tmux' if live else 'resume')
+    busy = (live and live.get('status') != 'idle')  # waiting = ждёт разрешения: вставка ответила бы на него
+    busy = busy or (not live and not new and bg_busy(sid))
+    if busy and time.time() - m['ts'] < WAIT_MAX:
+        if not from_wait and not DRY:
+            tg.send(f"⏳ Сессия занята ({'консоль' if live else 'фон'}), передам, как освободится.", reply=m['id'], kind='sys')
+        log('wait', m['id'], sid, how)
+        return 'wait'
+    if busy and live:
+        how, live = 'resume', None  # слишком долго занята в консоли — будим копию фоном
+    md = write_md(m, sid, how)
+    log('route', m['id'], '->', how, sid)
+    if DRY:
+        return 'done'
+    # Входящее тоже в индекс: reply на своё сообщение продолжит ту же сессию
+    tg.log_sent([m['id']], sid, 'owner', m.get('text') or '')
+    PEND.mkdir(exist_ok=True)
+    (PEND / f'{sid}.json').write_text(json.dumps({'reply_to': m['id'], 'ts': int(time.time())}))
+    if live:
+        try:
+            to_tmux(live, prompt_for(m, md, live=True))
+            return 'done'
+        except (subprocess.CalledProcessError, OSError) as e:
+            log('tmux fail, фоном:', e)
+    run_bg(sid, prompt_for(m, md), new, m['id'])
+    return 'done'
+
+
+def main():
+    for d in (INBOX, DONE, WAIT, MSGS, PEND, RUN):
+        d.mkdir(exist_ok=True)
+    lk = open(D / 'dispatch.lock', 'w')
+    try:
+        fcntl.flock(lk, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return log('уже идёт')
+    for _ in range(10):  # пока бот докладывает новые
+        jobs = [(f, False) for f in sorted(WAIT.glob('*.json'))] + [(f, False) for f in sorted(INBOX.glob('*.json'))]
+        jobs = [(f, f.parent == WAIT) for f, _ in jobs]
+        if not jobs:
+            break
+        idx = sent_index()
+        progressed = False
+        for f, from_wait in jobs:
+            try:
+                m = json.loads(f.read_text())
+            except (json.JSONDecodeError, OSError) as e:
+                log('битый', f.name, e)
+                if not DRY:
+                    f.replace(DONE / f.name)
+                continue
+            res = handle(m, idx, from_wait)
+            if DRY:
+                continue
+            if res == 'wait':
+                if not from_wait:
+                    f.replace(WAIT / f.name)
+            else:
+                f.replace(DONE / f.name)
+                progressed = True
+        if DRY or not progressed or not any(INBOX.glob('*.json')):
+            break
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,13 @@
+[Unit]
+Description=libsec MVP (libsec.alid.in) -> 127.0.0.1:8795
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/sec/app
+ExecStart=/usr/bin/python3 /home/ubuntu/sec/app/app.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
