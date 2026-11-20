@@ -23,8 +23,15 @@ app.mount('/static', StaticFiles(directory=BASE / 'static'), name='static')
 tpl = Jinja2Templates(directory=BASE / 'templates')
 
 
+_local = __import__('threading').local()
+
+
 def db():
-    return connect(readonly=True)
+    """Одно read-only соединение на поток (uvicorn/anyio держит пул потоков)."""
+    c = getattr(_local, 'c', None)
+    if c is None:
+        c = _local.c = connect(readonly=True)
+    return c
 
 
 def fmt_date(t, f='%Y-%m-%d'):
