@@ -34,13 +34,20 @@ def call(method, data, files=None):
         req = urllib.request.Request(API + method, body, {'Content-Type': f'multipart/form-data; boundary={b}'})
     else:
         req = urllib.request.Request(API + method, urllib.parse.urlencode(data).encode())
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return json.load(r)
-    except urllib.error.HTTPError as e:
-        return json.loads(e.read() or b'{}')
-    except OSError as e:
-        return {'ok': False, 'description': str(e)}
+    err = ''
+    for pause in (0, 5, 15, 30):  # сбои сети до api.telegram.org бывают короткими: повторяем
+        time.sleep(pause)
+        try:
+            with urllib.request.urlopen(req, timeout=25) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            r = json.loads(e.read() or b'{}')
+            if e.code != 429 and e.code < 500:
+                return r
+            err = r.get('description') or str(e)
+        except OSError as e:
+            err = str(e)
+    return {'ok': False, 'net': True, 'description': err}
 
 
 def _inline(s):
@@ -118,7 +125,7 @@ def send(text, sid='', reply=None, is_html=False, kind='answer'):
         if reply and not i:
             d['reply_parameters'] = json.dumps({'message_id': reply, 'allow_sending_without_reply': True})
         r = call('sendMessage', d)
-        if not r.get('ok'):  # битый HTML: без разметки
+        if not r.get('ok') and not r.get('net'):  # битый HTML: без разметки
             d['parse_mode'] = ''
             d['text'] = re.sub(r'<[^>]+>', '', d['text'])
             d['text'] = html.unescape(d['text'])

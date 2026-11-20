@@ -183,14 +183,34 @@ def handle(m, idx, from_wait=False):
     return 'done'
 
 
+def flush_unsent():
+    """Ответы, которые Stop-хук не смог отправить ( сбой сети ) -> повтор; старше суток — сдаёмся."""
+    for f in sorted((D / 'unsent').glob('*.json')):
+        try:
+            j = json.loads(f.read_text())
+            tg.send(j['text'], sid=j['sid'], reply=j.get('reply'), is_html=True)
+            f.unlink()
+            log('unsent отправлен', f.name)
+        except SystemExit as e:
+            log('unsent ещё нет', f.name, e)
+            if time.time() - j.get('ts', 0) > 86400:
+                f.rename(f.with_suffix('.dead'))
+            break
+        except (json.JSONDecodeError, OSError, KeyError) as e:
+            log('unsent битый', f.name, e)
+            f.rename(f.with_suffix('.bad'))
+
+
 def main():
-    for d in (INBOX, DONE, WAIT, MSGS, PEND, RUN):
+    for d in (INBOX, DONE, WAIT, MSGS, PEND, RUN, D / 'unsent'):
         d.mkdir(exist_ok=True)
     lk = open(D / 'dispatch.lock', 'w')
     try:
         fcntl.flock(lk, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         return log('уже идёт')
+    if not DRY:
+        flush_unsent()
     for _ in range(10):  # пока бот докладывает новые
         jobs = [(f, False) for f in sorted(WAIT.glob('*.json'))] + [(f, False) for f in sorted(INBOX.glob('*.json'))]
         jobs = [(f, f.parent == WAIT) for f, _ in jobs]

@@ -86,8 +86,29 @@ def main():
     if not reply and ask.strip():
         q = ' '.join(ask.split())
         text = '💬 <i>' + html.escape(q[:300] + '…' if len(q) > 300 else q, quote=False) + '</i>\n\n' + text
-    ids = tg.send(text, sid=sid, reply=reply, is_html=True)
-    log('sent', sid, ids, 'reply' if reply else 'console', len(answer))
+    # Отправка в фоне: хук не должен упираться в свой таймаут при сбое сети (иначе ответ теряется)
+    job = {'text': text, 'sid': sid, 'reply': reply, 'ts': int(time.time())}
+    if os.fork():
+        return log('queued', sid, 'reply' if reply else 'console', len(answer))
+    os.setsid()
+    for fd in (0, 1, 2):
+        os.close(fd)
+    deliver(tg, job)
+    os._exit(0)
+
+
+def deliver(tg, job):
+    """Отправить; не вышло — в data/unsent/, диспетчер повторит раз в минуту."""
+    try:
+        ids = tg.send(job['text'], sid=job['sid'], reply=job['reply'], is_html=True)
+        log('sent', job['sid'], ids)
+        return True
+    except SystemExit as e:
+        u = L / 'data/unsent'
+        u.mkdir(exist_ok=True)
+        (u / f"{job['ts']}-{job['sid']}.json").write_text(json.dumps(job, ensure_ascii=False))
+        log('unsent', job['sid'], e)
+        return False
 
 
 try:
