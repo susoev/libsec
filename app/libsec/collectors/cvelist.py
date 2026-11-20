@@ -10,7 +10,7 @@ from .. import normalize, pipeline
 from ..net import client
 
 NAME = 'cvelist'
-INTERVAL = 15 * 60
+INTERVAL = 10 * 60
 SILENT_H = 6
 BACKFILL = 30
 BASE = 'https://github.com/CVEProject/cvelistV5/releases/download'
