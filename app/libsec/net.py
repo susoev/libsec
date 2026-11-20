@@ -1,6 +1,6 @@
 import httpx
 
-UA = 'libsec-tracker/0.1 (+https://libsec.alid.in)'
+UA = 'libsec-tracker/0.1 (+https://websec.in)'
 
 
 def client(timeout=60):

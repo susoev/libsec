@@ -4,7 +4,7 @@
 
 - Воркер: юнит `libsec-worker` (`python -m libsec.worker`), лог `logs/worker.log`. Один проход: `cd app && ~/venvs/libsec/bin/python -m libsec.worker once [источник…]`. После правки каталога или парсеров: остановить воркер, `… -m libsec.worker reparse`, запустить воркер.
 - БД: `data/libsec.db` (SQLite). Сайт открывает её только на чтение, пишет только воркер.
-- Интервалы источников: таблица `sources.interval_sec`, работает без деплоя. Состояние источников: https://libsec.alid.in/status.
+- Интервалы источников: таблица `sources.interval_sec`, работает без деплоя. Состояние источников: https://websec.in/status.
 - ИИ: `libsec-ai.timer` раз в 10 минут запускает `python -m libsec.ai` (лог `logs/ai.log`, очередь: `… -m libsec.ai --status`). Он будит локальный `claude -p` на пачку до 8 свежих записей и завершается. Лимит — 6 пачек в час.
 - TG: пока не задан канал (`LIBSEC_TG_CHAT` в `deploy/libsec-worker.service`), посты идут в топик Sec, не больше 3 в сутки.
 - Тесты: `cd app && ~/venvs/libsec/bin/python -m tests.test_core`.
@@ -12,7 +12,7 @@
 ## Код, сайт, git
 
 - Репозиторий: github.com/susoev/libsec (**публичный**, ветка `main`), рабочая копия — сама папка `~/sec`. Секреты, `data/`, `logs/` в `.gitignore` — ничего секретного не коммитить.
-- MVP: https://libsec.alid.in → nginx (`deploy/libsec.alid.in.nginx`, сертификат `*.alid.in`) → uvicorn `libsec.web:app` на 127.0.0.1:8795, юнит `libsec` (`deploy/libsec.service`). Проверка: `/health`.
+- Сайт: https://websec.in (с 2026-11-20; домен на Dynadot, DNS там же) → nginx (`deploy/websec.in.nginx`, сертификат `websec.in` + `*.websec.in`, dns-01 через API Dynadot; `www`, поддомены и старый libsec.alid.in — 301 на websec.in) → uvicorn `libsec.web:app` на 127.0.0.1:8795, юнит `libsec` (`deploy/libsec.service`). Проверка: `/health`.
 - `bin/sync "сообщение"` — коммит, pull --rebase, push. Если менялся `app/`, перезапускает `libsec` и `libsec-worker`; `deploy/` — переустанавливает юниты и nginx; `app/requirements.txt` — ставит зависимости. В конце проверяет сайт. `bin/sync --apply` применяет всё без git.
 
 - `bin/sync` — синхрон с GitHub и выкладка (см. выше).

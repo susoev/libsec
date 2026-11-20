@@ -3,7 +3,7 @@
 A vulnerability tracker for the web stack: PHP, Python, MySQL/MariaDB, PostgreSQL, nginx, Apache, Tomcat, OpenSSL, Docker, Laravel, Django and more — 50 products.
 It collects from several sources, merges duplicates, ranks by urgency, writes short AI summaries and publishes a feed, RSS, JSON API and Telegram posts.
 
-MVP: https://libsec.alid.in
+Сайт: https://websec.in (старый libsec.alid.in — 301)
 
 ```
 cvelistV5 delta · OSV/GHSA · CISA KEV · EPSS · CVE API · nginx.org

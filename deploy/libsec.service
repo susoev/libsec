@@ -1,5 +1,5 @@
 [Unit]
-Description=libsec web (libsec.alid.in) -> 127.0.0.1:8795
+Description=libsec web (websec.in) -> 127.0.0.1:8795
 After=network.target
 
 [Service]

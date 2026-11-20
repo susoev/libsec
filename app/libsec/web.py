@@ -14,7 +14,7 @@ from . import catalog
 from .db import DB, connect, loads
 
 BASE = Path(__file__).resolve().parent.parent
-SITE = 'https://libsec.alid.in'
+SITE = 'https://websec.in'
 PRIOS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNRATED']
 PAGE = 30
 

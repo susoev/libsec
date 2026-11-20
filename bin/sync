@@ -1,5 +1,5 @@
 #!/bin/bash
-# Синхрон ~/sec <-> github.com/susoev/libsec и выкладка на libsec.alid.in.
+# Синхрон ~/sec <-> github.com/susoev/libsec и выкладка на websec.in.
 #   bin/sync "сообщение"   закоммитить всё изменённое, pull --rebase, push, применить
 #   bin/sync               только pull/push + применить
 #   bin/sync --apply       применить всё (юниты, nginx, зависимости, рестарт) без git
@@ -31,8 +31,10 @@ if has '^deploy/.*\.\(service\|timer\)'; then
   sudo systemctl enable -q libsec libsec-worker
   sudo systemctl enable -q --now libsec-ai.timer; restart=1
 fi
-if has '^deploy/libsec.alid.in.nginx'; then
-  sudo cp deploy/libsec.alid.in.nginx /etc/nginx/sites-available/libsec.alid.in
+if has '^deploy/websec.in.nginx'; then
+  sudo cp deploy/websec.in.nginx /etc/nginx/sites-available/websec.in
+  sudo ln -sf /etc/nginx/sites-available/websec.in /etc/nginx/sites-enabled/websec.in
+  sudo rm -f /etc/nginx/sites-enabled/libsec.alid.in
   sudo nginx -t -q && sudo systemctl reload nginx
 fi
 has '^app/' && restart=1
@@ -40,4 +42,4 @@ if [ $restart = 1 ]; then
   sudo systemctl restart libsec libsec-worker; sleep 2
 fi
 git log -1 --format='HEAD %h %s'
-curl -sf https://libsec.alid.in/health >/dev/null && echo "libsec.alid.in: ok" || { echo "libsec.alid.in: НЕ отвечает"; exit 1; }
+curl -sf https://websec.in/health >/dev/null && echo "websec.in: ok" || { echo "websec.in: НЕ отвечает"; exit 1; }

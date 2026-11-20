@@ -68,3 +68,10 @@
 - `noindex` до выхода на боевой домен.
 - RSS: `/feed.xml?product=&prio=&kev=`. API: `/api/v1/vulns`, `/api/v1/vulns/{id|alias}`, `/api/v1/products`, OpenAPI — `/api/docs`.
 - `/status` — состояние коллекторов. Алерты в топик Sec: источник падает 3 раза подряд или cvelist молчит больше 6 часов.
+
+## Домен websec.in (2026-11-20)
+
+- Сайт переехал с libsec.alid.in на https://websec.in (куплен на Dynadot). Старый адрес, `www` и любые `*.websec.in` — 301 на `https://websec.in` с сохранением пути.
+- DNS — Dynadot DNS (`ns1/ns2.dyna-ns.net`): `@` и `*` → A 51.161.35.179. Правка: `sudo python3 /usr/local/lib/dynadot-dns.py get|set-web` (ключ — `DYNADOT_ENV` в `dok`, файл `/root/.secrets/dynadot.env`). `set_dns2` у Dynadot перезаписывает всю зону — скрипт всегда отправляет полный список.
+- Сертификат `websec.in` + `*.websec.in` (ECDSA, Let's Encrypt), dns-01, хуки `/usr/local/sbin/dynadot-acme-auth|cleanup`, продление — обычный `certbot renew`. Dynadot публикует изменения медленно (минуты), хук ждёт TXT на обоих NS до 20 минут.
+- `noindex` пока остаётся.

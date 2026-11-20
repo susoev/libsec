@@ -17,7 +17,7 @@ from .db import ROOT, loads
 
 log = logging.getLogger('tg')
 ENV_FILE = ROOT / '.secrets/tg.env'
-SITE = os.environ.get('LIBSEC_SITE', 'https://libsec.alid.in')
+SITE = os.environ.get('LIBSEC_SITE', 'https://websec.in')
 PER_MIN = 15           # лимит Telegram ~20/мин в один чат — держим запас
 AI_WAIT = 20 * 60      # alert ждёт ИИ-резюме не дольше
 DIGEST_HOUR = 9        # UTC
