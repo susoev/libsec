@@ -25,6 +25,7 @@ site · RSS · /api/v1 · Telegram queue (urgent now, rest as daily digest)
 - `app/libsec/tg.py` — Telegram queue and rules.
 - `app/libsec/worker.py` — scheduler: `python -m libsec.worker [once [source…] | reparse]`.
 - `app/libsec/web.py`, `app/templates/` — the site, RSS, API, sitemap.
+- `app/libsec/og.py` — og:image / Twitter card previews (1200×630 PNG via Pillow), drawn on request, cached in memory.
 - `app/libsec/i18n.py`, `app/i18n/*.json` — languages by subdomain, UI strings; `tools/i18n_gen.py` fills missing strings via `claude -p`.
 - `deploy/` — systemd units `libsec` (web), `libsec-worker` (collectors) and `libsec-ai.timer`, nginx config.
 - `docs/api.md` — API guide, served at https://websec.in/api/doc.
@@ -32,6 +33,7 @@ site · RSS · /api/v1 · Telegram queue (urgent now, rest as daily digest)
 
 ## Run
 ```bash
+sudo apt install fonts-noto-cjk                               # fonts for og:image previews (Latin, Cyrillic, CJK)
 python3 -m venv ~/venvs/libsec && ~/venvs/libsec/bin/pip install -r app/requirements.txt
 cd app && ~/venvs/libsec/bin/python -m libsec.worker once      # collect everything once
 ~/venvs/libsec/bin/uvicorn libsec.web:app --port 8795          # site

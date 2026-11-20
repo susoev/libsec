@@ -52,3 +52,6 @@ footer{border-top:1px solid var(--line);padding:18px 0 30px;color:var(--mute);fo
 .plinks{font-size:14px;line-height:1.9}
 .related{padding-left:0;list-style:none}.related li{margin:0 0 6px;font-size:14px}
 footer p{margin:0 0 8px}.langlist a,.langlist b{white-space:nowrap}
+pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow-x:auto;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:8px 0 14px}
+.steps li{margin:0 0 8px}.lead{font-size:17px}
+.vals{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin:0;padding:0;list-style:none}.vals li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}

@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 
-from . import catalog, i18n
+from . import catalog, i18n, og
 from .i18n import LANGS, origin
 from .db import DB, connect, loads
 
@@ -68,7 +68,7 @@ def lang_of(request):
     return i18n.host_lang(request.headers.get('host'))
 
 
-def render(request, name, ctx, *, path=None, langs=None, index=True, status=200, ld=None):
+def render(request, name, ctx, *, path=None, langs=None, index=True, status=200, ld=None, image='/og/site.png'):
     """Шаблон + SEO-обвязка: язык, canonical, hreflang (только языки, где страница есть и индексируется), robots.
     path — канонический путь с нужными параметрами (по умолчанию путь запроса без параметров)."""
     L = lang_of(request)
@@ -80,7 +80,7 @@ def render(request, name, ctx, *, path=None, langs=None, index=True, status=200,
         alts.append(('x-default', origin(i18n.DEFAULT) + path))
     ctx.update(L=L, _=i18n.gettext(L), ld=ld or [], ORIGIN=origin(L), canonical=origin(L) + path, alts=alts, path=path,
                robots='index,follow' if index else 'noindex,follow', page_langs=langs,
-               switch=[(l, LANGS[l]['name'], origin(l) + path) for l in LANGS])
+               switch=[(l, LANGS[l]['name'], origin(l) + path) for l in LANGS], og_image=origin(L) + image)
     return tpl.TemplateResponse(request, name, ctx, status_code=status)
 
 
@@ -236,7 +236,8 @@ def vuln(request: Request, vid: str):
             related.append((catalog.BY_SLUG[p], [(r, ra.get(r['id'])) for r in rr]))
     return render(request, 'vuln.html', {'v': v, 'events': ev, 'sources': src, 'an': an, 'an_row': an_row, 'prods': prods, 'related': related,
                                          'head': (an or {}).get('headline') or v['title'] or vid},
-                  path=f'/vuln/{vid}', langs=tr_langs(c, vid, an_en), index=bool(v['relevant']))
+                  path=f'/vuln/{vid}', langs=tr_langs(c, vid, an_en), index=bool(v['relevant']),
+                  image=f"/og/vuln/{vid}.png?v={int(v['modified'] or 0) % 100000}{'a' if an else ''}")
 
 
 @app.get('/products', response_class=HTMLResponse)
@@ -249,7 +250,7 @@ def products(request: Request):
     ld = [{'@context': 'https://schema.org', '@type': 'CollectionPage', 'name': str(i18n.gettext(L)('Tracked products')), 'url': origin(L) + '/products',
            'inLanguage': LANGS[L]['hreflang'], 'mainEntity': {'@type': 'ItemList', 'numberOfItems': len(catalog.P), 'itemListElement': [
                {'@type': 'ListItem', 'position': i + 1, 'url': f"{origin(L)}/product/{p['slug']}", 'name': p['name']} for i, p in enumerate(catalog.P)]}}]
-    return render(request, 'products.html', {'st': st}, ld=ld)
+    return render(request, 'products.html', {'st': st}, ld=ld, image='/og/page/products.png')
 
 
 @app.get('/product/{slug}', response_class=HTMLResponse)
@@ -267,7 +268,7 @@ def product(request: Request, slug: str, page: int = 1):
     return render(request, 'product.html', {'p': p, 'rows': rows, 'ai': ai,
                                             'total': total, 'page': page, 'pages': (total + PAGE - 1) // PAGE,
                                             'siblings': [x for x in catalog.P if x['cat'] == p['cat'] and x['slug'] != slug]},
-                  path=f'/product/{slug}' + (f'?page={page}' if page > 1 else ''), ld=ld)
+                  path=f'/product/{slug}' + (f'?page={page}' if page > 1 else ''), ld=ld, image=f'/og/product/{slug}.png')
 
 
 @app.get('/status', response_class=HTMLResponse)
@@ -282,7 +283,7 @@ def status(request: Request):
         'raw': {r[0]: r[1] for r in c.execute('select source, count(*) from raw_items group by source')},
         'tg': {r[0]: r[1] for r in c.execute('select status, count(*) from tg_queue group by status')},
     }
-    return render(request, 'status.html', {'src': src, 'st': st, 'now': time.time()}, index=False)
+    return render(request, 'status.html', {'src': src, 'st': st, 'now': time.time()}, index=False, image='/og/page/status.png')
 
 
 @app.get('/about', response_class=HTMLResponse)
@@ -290,7 +291,82 @@ def about(request: Request):
     L = lang_of(request)
     ld = [{'@context': 'https://schema.org', '@type': 'AboutPage', 'url': origin(L) + '/about', 'inLanguage': LANGS[L]['hreflang'],
            'name': str(i18n.gettext(L)('About {b}', b=i18n.BRAND)), 'about': ld_org()}, ld_dataset(L), ld_source_code()]
-    return render(request, 'about.html', {}, ld=ld)
+    return render(request, 'about.html', {}, ld=ld, image='/og/page/about.png')
+
+
+@app.get('/how', response_class=HTMLResponse)
+def how(request: Request):
+    """«Как это работает» простыми словами + примеры запросов к API."""
+    L = lang_of(request)
+    _ = i18n.gettext(L)
+    ld = [{'@context': 'https://schema.org', '@type': 'WebPage', 'url': origin(L) + '/how', 'inLanguage': LANGS[L]['hreflang'],
+           'name': str(_('How {b} works', b=i18n.BRAND)), 'isPartOf': {'@type': 'WebSite', 'name': i18n.BRAND, 'url': origin(L) + '/'},
+           'about': ld_org()}]
+    return render(request, 'how.html', {}, ld=ld, image='/og/page/how.png')
+
+
+# ---------- картинки-превью (og:image)
+def png(data):
+    return Response(data, media_type='image/png', headers={'Cache-Control': 'public, max-age=86400'})
+
+
+@app.get('/og/site.png')
+def og_site(request: Request):
+    L = lang_of(request)
+    _ = i18n.gettext(L)
+    return png(og.card(L, origin(L).removeprefix('https://'), str(_('Vulnerabilities in your web stack: what to fix now')),
+                       str(_('Free feed, RSS and JSON API')), str(_('PHP, Python, MySQL, nginx, Apache and 45 more products')),
+                       tuple((x, None) for x in ('CVE', 'OSV', 'GitHub Advisory', 'CISA KEV', 'EPSS')) + (('AI', og.ACC),)))
+
+
+@app.get('/og/page/{name}.png')
+def og_page(request: Request, name: str):
+    L = lang_of(request)
+    _ = i18n.gettext(L)
+    titles = {'about': _('About {b}', b=i18n.BRAND), 'how': _('How {b} works', b=i18n.BRAND),
+              'products': _('Tracked products'), 'status': _('Collector status')}
+    if name not in titles:
+        raise HTTPException(404)
+    return png(og.card(L, origin(L).removeprefix('https://'), str(titles[name]), str(_('Vulnerabilities in your web stack: what to fix now')),
+                       str(_('PHP, Python, MySQL, nginx, Apache and 45 more products'))))
+
+
+@app.get('/og/vuln/{vid}.png')
+def og_vuln(request: Request, vid: str):
+    c = db()
+    v = c.execute('select * from vulns where id=?', (vid,)).fetchone()
+    if not v:
+        raise HTTPException(404)
+    L = lang_of(request)
+    _ = i18n.gettext(L)
+    a = analysis_map(c, [vid], L).get(vid) or {}
+    names = [catalog.BY_SLUG[p]['name'] for p in loads(v['products'], []) if p in catalog.BY_SLUG]
+    chips = [(str(_(v['priority'].lower())).upper(), og.PRIO.get(v['priority'], og.ACC))]
+    if v['kev']:
+        chips.append(('CISA KEV', og.KEV))
+    if v['cvss_score'] is not None:
+        chips.append((f"CVSS {v['cvss_score']}", None))
+    if v['epss'] is not None:
+        chips.append((f"EPSS {v['epss'] * 100:.0f}%" if v['epss'] >= 0.01 else f"EPSS {v['epss'] * 100:.1f}%", None))
+    fx = fixed_versions(v, a)
+    return png(og.card(L, origin(L).removeprefix('https://'), a.get('headline') or v['title'] or vid,
+                       ' · '.join([vid] + names[:3]), str(_('Fixed in {v}', v=', '.join(fx[:6]))) if fx else '',
+                       tuple(chips), og.PRIO.get(v['priority'], og.ACC)))
+
+
+@app.get('/og/product/{slug}.png')
+def og_product(request: Request, slug: str):
+    p = catalog.BY_SLUG.get(slug)
+    if not p:
+        raise HTTPException(404)
+    c = db()
+    total, kev = c.execute('select count(*), coalesce(sum(v.kev), 0) from vuln_products p join vulns v on v.id=p.vuln_id'
+                           ' where p.product=? and v.relevant=1', (slug,)).fetchone()
+    L = lang_of(request)
+    _ = i18n.gettext(L)
+    chips = [(str(_('{n} known vulnerabilities', n=total)), None)] + ([(f'CISA KEV: {kev}', og.KEV)] if kev else [])
+    return png(og.card(L, origin(L).removeprefix('https://'), str(_('{name} vulnerabilities', name=p['name'])), str(_(catalog.CATS[p['cat']])),
+                       str(_('Affected and fixed versions, CVSS, EPSS and CISA KEV status')), tuple(chips)))
 
 
 # ---------- RSS
@@ -496,6 +572,7 @@ def llms(request: Request):
            f'- [Sitemap]({o}/sitemap.xml)', '',
            '## Pages', '',
            f'- [Feed]({o}/): new and escalated vulnerabilities, last 45 days, filters by priority, KEV, product, search `?q=`',
+           f'- [How it works]({o}/how): the pipeline and the AI in plain words, API examples',
            f'- [Products]({o}/products): tracked products by category',
            f'- [About, method and API]({o}/about): sources, licences, priority rule, caveats',
            f'- [Collector status]({o}/status): freshness of every source', '',
@@ -554,7 +631,7 @@ def sitemap(request: Request):
     """Sitemap своего поддомена с xhtml:link на все языковые версии каждой страницы."""
     L = lang_of(request)
     c = db()
-    pages = [('/', None, LANGS), ('/products', None, LANGS), ('/about', None, LANGS)]
+    pages = [('/', None, LANGS), ('/how', None, LANGS), ('/products', None, LANGS), ('/about', None, LANGS)]
     last = {r[0]: r[1] for r in c.execute('select p.product, max(v.modified) from vuln_products p join vulns v on v.id=p.vuln_id where v.relevant=1 group by p.product')}
     pages += [(f'/product/{p["slug"]}', last.get(p['slug']), LANGS) for p in catalog.P]
     an = {r[0]: i18n.tr_hash(loads(r[1])) for r in c.execute('select vuln_id, data from analysis where data is not null')}

@@ -57,6 +57,7 @@ def test_i18n():
     assert i18n.host_lang('ru.websec.in') == 'ru' and i18n.host_lang('websec.in') == 'en' and i18n.host_lang('xx.websec.in') == 'en'
     assert str(i18n.gettext('de')('{n} min ago', n=5)).startswith('vor 5')
     assert str(i18n.reason('CVSS 9.8 critical; EPSS 97%', 'ru')).startswith('CVSS 9.8 ')
+    assert '9.8' in str(i18n.gettext('ru')('CVSS {s} ({sev}) by {by}', s=9.8, sev='x', by='CNA'))  # {s} не конфликтует с аргументом
 
 
 def test_tr_ok():
@@ -65,6 +66,34 @@ def test_tr_ok():
     assert tr_ok(src, {'summary': 'Corregido en 1.2.3 y 2.0.', 'preconditions': ['x', 'y']})
     assert not tr_ok(src, {'summary': 'Corregido en 1.2.4 y 2.0.', 'preconditions': ['x', 'y']})
     assert not tr_ok(src, {'summary': 'Corregido en 1.2.3 y 2.0.', 'preconditions': ['x']})
+
+
+def test_web():
+    """Смоук сайта и API на живой БД (если она есть): страницы на языках, свежие уязвимости, og-картинки, конверт API."""
+    from libsec.db import DB
+    if not DB.exists():
+        return
+    from fastapi.testclient import TestClient
+    from libsec.web import app, db
+    c = TestClient(app)
+    ids = [r[0] for r in db().execute('select id from vulns where listed=1 order by feed_ts desc limit 40')]
+    ids += [r[0] for r in db().execute("select distinct vuln_id from events where type='scored' limit 20")]
+    for host in ('websec.in', 'ru.websec.in', 'zh.websec.in'):
+        h = {'host': host}
+        for path in ['/', '/how', '/about', '/products', '/product/php', '/status', '/og/site.png', '/og/page/how.png',
+                     '/og/product/php.png'] + [f'/vuln/{i}' for i in ids[:5]] + [f'/og/vuln/{i}.png' for i in ids[:3]]:
+            r = c.get(path, headers=h)
+            assert r.status_code == 200, (host, path, r.status_code)
+    for i in ids:
+        assert c.get(f'/vuln/{i}', headers={'host': 'de.websec.in'}).status_code == 200, i
+    r = c.get('/', headers={'host': 'websec.in'}).text
+    assert 'summary_large_image' in r and 'https://websec.in/og/site.png' in r
+    d = c.get('/api/high10?n=3', headers={'host': 'websec.in'}).json()
+    assert d['result'] is True and d['doc'].endswith('/api/doc') and len(d['items']) <= 3
+    assert all(x['priority'] in ('CRITICAL', 'HIGH') for x in d['items'])
+    d = c.get('/api/high10?n=500', headers={'host': 'websec.in'})
+    assert d.status_code == 400 and d.json()['result'] is False
+    assert c.get('/api/high10', headers={'host': 'ru.websec.in'}, follow_redirects=False).status_code == 301
 
 
 if __name__ == '__main__':

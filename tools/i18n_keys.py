@@ -9,6 +9,7 @@ from libsec import catalog  # noqa: E402
 keys = []
 for f in sorted((APP / 'templates').glob('*.html')):
     keys += [k.replace("\\'", "'") for k in re.findall(r"""_\('((?:[^'\\]|\\.)*)'""", f.read_text())]
+keys += [k.replace("\\'", "'") for k in re.findall(r"""_\('((?:[^'\\]|\\.)*)'""", (APP / 'libsec' / 'web.py').read_text())]
 keys += ['{n} min ago', '{n} h ago', '{n} d ago', 'exploited in the wild (CISA KEV)', 'no CVSS yet', '{sev} per {src}',
          'critical', 'high', 'medium', 'low', 'none', 'unrated', 'moderate',
          'network', 'adjacent', 'local', 'physical', 'unknown', 'likely', 'possible', 'unlikely',

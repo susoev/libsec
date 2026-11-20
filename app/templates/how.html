@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ _('How {b} works', b=BRAND) }}: {{ _('sources, AI and API in plain words') }}{% endblock %}
+{% block desc %}{{ _('{b} watches vulnerabilities in popular server and website software, keeps only what matters and tells you in plain words what to update. How the pipeline, the AI and the API work.', b=BRAND) }}{% endblock %}
+{% block crumbs %}<p class="note"><a href="/">{{ BRAND }}</a> › {{ _('How it works') }}</p>{% endblock %}
+{% block main %}
+<h1>{{ _('How {b} works', b=BRAND) }}</h1>
+<p class="sub lead">{{ _('{b} watches vulnerabilities in popular server and website software, keeps only what matters and tells you in plain words what to update.', b=BRAND) }}</p>
+
+<h2>{{ _('How the database is built') }}</h2>
+<ol class="steps">
+  <li>{{ _('Every 10–60 minutes the service checks the main open sources: the global CVE registry, the GitHub and OSV vulnerability databases for libraries, the CISA list of vulnerabilities that are already being exploited, the EPSS exploitation forecast and the vendors’ own security pages (for example, nginx).') }}</li>
+  <li>{{ _('It keeps only what concerns <a href="/products">50 popular products</a> for websites and servers: PHP, Python, MySQL, PostgreSQL, nginx, Apache, Tomcat, OpenSSL, Docker, WordPress, Laravel, Django and others.') }}</li>
+  <li>{{ _('One vulnerability is often described by several sources under different IDs. The service merges them into one record, so there are no duplicates.') }}</li>
+  <li>{{ _('Each record gets an urgency level: critical, high, medium or low. The rule is open: it uses the vendor’s score, whether the vulnerability is already being exploited, and how likely an attack is.') }}</li>
+  <li>{{ _('If the situation changes, for example attackers start exploiting the vulnerability, the record moves back to the top of the feed.') }}</li>
+</ol>
+
+<h2>{{ _('What the AI does') }}</h2>
+<ol class="steps">
+  <li>{{ _('Every 10 minutes the AI takes the fresh records.') }}</li>
+  <li>{{ _('It rewrites the technical text in plain words: what is broken, who is affected, with which settings it is dangerous, and what to do.') }}</li>
+  <li>{{ _('It gives its own estimate of how dangerous this is for a typical server, and explains why.') }}</li>
+  <li>{{ _('It names the versions with the fix. The program checks every version against the sources, so a version made up by the AI does not get through.') }}</li>
+  <li>{{ _('It translates the summary into 7 languages.') }}</li>
+  <li>{{ _('AI text is always labelled, and links to the original sources are always next to it.') }}</li>
+</ol>
+
+<h2>{{ _('Where to get it') }}</h2>
+<ul class="steps">
+  <li>{{ _('<a href="/">The feed on this site</a>: the last 45 days, filters by product and urgency, search.') }}</li>
+  <li>{{ _('Telegram: urgent items right away, the rest as a daily digest.') }}</li>
+  <li>{{ _('<a href="/feed.xml">RSS</a>, also for a single product or urgency level.') }}</li>
+  <li>{{ _('A JSON API for automation: a script or an AI agent can check your servers and update them on its own. Examples are below.') }}</li>
+</ul>
+
+<h2>{{ _('Why it is useful') }}</h2>
+<ul class="vals">
+  <li>{{ _('<b>Everything in one place.</b> No need to follow a dozen sites and mailing lists.') }}</li>
+  <li>{{ _('<b>Only your stack.</b> No thousands of vulnerabilities in software you do not use.') }}</li>
+  <li>{{ _('<b>Clear priorities.</b> Urgency follows an open rule, and what is already being exploited is highlighted.') }}</li>
+  <li>{{ _('<b>Clear actions.</b> Each record says which version to update to and with which settings the vulnerability is dangerous.') }}</li>
+  <li>{{ _('<b>Fast.</b> New records appear 10–60 minutes after publication.') }}</li>
+  <li>{{ _('<b>No guesswork.</b> Facts come only from official sources, danger scores are never invented, version numbers are checked.') }}</li>
+  <li>{{ _('<b>For people and machines.</b> The site in 8 languages, Telegram, RSS and a JSON API.') }}</li>
+  <li>{{ _('<b>Free and open.</b> No sign-up, the source code is on GitHub.') }}</li>
+</ul>
+
+<h2 id="api">{{ _('API examples') }}</h2>
+<p>{{ _('The API is free, needs no key and answers in English at {site}. Every response starts with <code>result</code> and <code>doc</code>, a link to the <a href="{doc}">full guide</a>.', site=SITE, doc=SITE ~ '/api/doc') }}</p>
+
+<p>{{ _('<b>What to fix now:</b> the 10 newest critical and high vulnerabilities, with fixed versions and what to do.') }}</p>
+<pre>curl -s {{ SITE }}/api/high10</pre>
+
+<p>{{ _('<b>Only your stack:</b> list your products (names are on the <a href="{url}">products list</a>) and how many records you want.', url=SITE ~ '/api/v1/products') }}</p>
+<pre>curl -s '{{ SITE }}/api/high10?product=php,nginx,mysql,openssl&amp;n=20'</pre>
+
+<p>{{ _('<b>Only critical vulnerabilities that attackers already exploit:</b>') }}</p>
+<pre>curl -s '{{ SITE }}/api/high10?priority=CRITICAL&amp;kev=1'</pre>
+
+<p>{{ _('<b>One vulnerability</b> by CVE or any other ID, with affected versions, links and history:') }}</p>
+<pre>curl -s {{ SITE }}/api/v1/vulns/CVE-2024-4577</pre>
+
+<p>{{ _('<b>The feed since a date</b>, for one product:') }}</p>
+<pre>curl -s '{{ SITE }}/api/v1/vulns?product=nginx&amp;priority=CRITICAL,HIGH&amp;since=2026-11-01'</pre>
+
+<p>{{ _('What an answer looks like (shortened):') }}</p>
+<pre>{
+  "result": true,
+  "doc": "{{ SITE }}/api/doc",
+  "count": 10,
+  "latest_feed_at": "2026-11-19T21:39:36Z",
+  "items": [{
+    "id": "CVE-2024-4577",
+    "products": ["php"],
+    "priority": "CRITICAL",
+    "exploited": true,
+    "epss": {"score": 0.94, "percentile": 0.99},
+    "fixed_versions": ["8.1.29", "8.2.20", "8.3.8"],
+    "action": "Upgrade PHP to 8.1.29, 8.2.20 or 8.3.8 …",
+    "affected": [{"product": "php", "ranges": [">= 8.1.*, < 8.1.29", "…"]}],
+    "feed_at": "2026-11-19T21:39:36Z"
+  }]
+}</pre>
+
+<p>{{ _('<b>For an agent that patches servers:</b> request <code>/api/high10</code> for your stack every 30 minutes, remember the latest <code>feed_at</code> you processed and handle only newer records. Compare installed versions with <code>affected</code> and <code>fixed_versions</code>, fix exploited ones first. Distribution packages (Debian, Ubuntu, RHEL) often fix a vulnerability without changing the upstream version, so check your distribution’s security tracker too.') }}</p>
+<p><a href="{{ SITE }}/api/doc">{{ _('Full API guide') }}</a> · <a href="{{ SITE }}/api/docs">{{ _('OpenAPI docs') }}</a> · <a href="/about">{{ _('About, method and API') }}</a></p>
+{% endblock %}
