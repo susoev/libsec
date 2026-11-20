@@ -84,3 +84,9 @@
 - Тексты ИИ-разборов переводит тот же `libsec-ai.timer` после разбора: `claude -p --model sonnet`, один вызов = 1 язык × до 10 записей, не больше 8 вызовов в час. Перевод, где потеряно хоть одно число или версия оригинала, отбрасывается. Описания CVE не переводятся (помечены как английский оригинал).
 - SEO: страница уязвимости на языке индексируется только при актуальном переводе разбора, иначе `noindex,follow`. hreflang и sitemap включают только индексируемые версии, плюс x-default на английскую. Страницы с фильтрами и поиском — `noindex,follow`. На каждой странице canonical, Open Graph и JSON-LD (WebSite с SearchAction; TechArticle и BreadcrumbList на уязвимостях; BreadcrumbList на продуктах).
 - Перелинковка: хлебные крошки; на уязвимости — «ещё уязвимости продукта» (по 6 на 2 продукта) и ссылки на продукты из таблицы версий; на продукте — соседние продукты категории; на ленте — все продукты по категориям; переключатель и список языков ведут на ту же страницу; ссылка на GitHub в шапке, подвале и в разделе About.
+
+## llms.txt и schema.org (2026-11-20)
+
+- `/llms.txt` (формат llmstxt.org) на каждом поддомене: что за сайт, метод, доступ к данным (API, OpenAPI, RSS), страницы, все продукты, свежие критичные/KEV, исходники. Ссылки ведут на поддомен запроса. Текст на английском, разборы в списке — на языке поддомена.
+- `/llms-full.txt` — 500 свежих записей ленты в Markdown: приоритет, CVSS/EPSS/KEV, резюме, действие, проверенные исправленные версии.
+- JSON-LD: Organization (`/#org`, sameAs GitHub) и WebSite с SearchAction — везде. Лента — CollectionPage + ItemList и Dataset (`/#dataset`, раздачи RSS/JSON). Продукты — CollectionPage + ItemList. Продукт — CollectionPage (about SoftwareApplication) + BreadcrumbList. About — AboutPage, Dataset, SoftwareSourceCode. Уязвимость — TechArticle (author/publisher, isBasedOn: запись CVE и ссылки, keywords, isPartOf dataset, translationOfWork у переводов) + BreadcrumbList.
