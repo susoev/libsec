@@ -458,6 +458,7 @@ API_ENDPOINTS = {
     'GET /api/v1/vulns': 'The feed, newest first. Params: product, priority=CRITICAL,HIGH, kev=1, q, since=2026-11-01, all=1, limit<=200, offset',
     'GET /api/v1/vulns/{id}': 'One record by CVE id or any alias (GHSA, PYSEC...): affected versions, references, timeline',
     'GET /api/v1/products': 'The product catalog: slugs for the product= parameter',
+    'GET /api/v1/status': 'Freshness of every data source: last attempt, last success, interval, failures, last error, last data change',
     'GET /api/doc': 'How to use this API (Markdown)',
     'GET /api/openapi.json': 'OpenAPI schema; interactive: /api/docs',
 }
@@ -524,6 +525,35 @@ def api_products():
                           'total': st.get(p['slug'], (0, 0))[1]} for p in catalog.P])
 
 
+@app.get('/api/v1/status')
+def api_status():
+    """Свежесть источников. `generated` в ответах API — время ответа, а не проверки первоисточников; здесь — по каждому источнику."""
+    c = db()
+    now = time.time()
+    changed = {r[0]: r[1] for r in c.execute(
+        'select source, max(t) from (select source, max(fetched_at) t from raw_items group by source '
+        'union all select source, max(updated) t from facts group by source) group by source')}
+    iso = lambda t: fmt_date(t, TS) or None  # noqa: E731
+    items = []
+    for r in c.execute('select * from sources order by name'):
+        if not r['enabled']:
+            state = 'disabled'
+        elif r['fails']:
+            state = 'failing'
+        elif not r['last_ok'] or now - r['last_ok'] > 3 * r['interval_sec']:
+            state = 'stale'
+        else:
+            state = 'ok'
+        items.append({'source': r['name'], 'state': state, 'enabled': bool(r['enabled']), 'interval_seconds': r['interval_sec'],
+                      'last_attempt_at': iso(r['last_run']), 'last_success_at': iso(r['last_ok']),
+                      'consecutive_failures': r['fails'], 'last_error': r['last_error'],
+                      'last_data_change_at': iso(changed.get(r['name'])), 'last_run_changes': r['last_new'], 'runs': r['runs']})
+    return api_ok(ok=all(x['state'] in ('ok', 'disabled') for x in items),
+                  note="state: ok | stale (no success for 3+ intervals) | failing (last attempt failed) | disabled. "
+                       "'generated' is the response time, not the time sources were checked.",
+                  items=items)
+
+
 @app.get('/api/doc', response_class=PlainTextResponse)
 def api_doc():
     return PlainTextResponse((BASE.parent / 'docs' / 'api.md').read_text(), media_type='text/plain; charset=utf-8')
@@ -566,6 +596,7 @@ def llms(request: Request):
            f'- [JSON API: feed]({SITE}/api/v1/vulns): `?product=nginx&priority=CRITICAL,HIGH&kev=1&since=2026-11-01&limit=50`, `all=1` for history beyond 45 days',
            f'- [JSON API: one record]({SITE}/api/v1/vulns/CVE-2024-4577): affected versions, references, timeline; any alias (GHSA, PYSEC…) works',
            f'- [JSON API: products]({SITE}/api/v1/products): the catalog',
+           f'- [JSON API: source status]({SITE}/api/v1/status): last attempt, last success, failures, last data change per source',
            f'- [OpenAPI]({SITE}/api/openapi.json): schema, [docs]({SITE}/api/docs)',
            f'- [RSS]({o}/feed.xml): `?product=php&prio=CRITICAL,HIGH&kev=1`',
            f'- [Full feed as text]({o}/llms-full.txt): the current 45-day feed with summaries, actions and fixed versions',

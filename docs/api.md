@@ -40,6 +40,7 @@ On error, `result` is `false`, `error` holds the reason, and the HTTP status is 
 | `GET /api/v1/vulns` | The feed: a short list with filters |
 | `GET /api/v1/vulns/{id}` | One record by CVE id or any alias, with its full history |
 | `GET /api/v1/products` | Product catalog: slugs for the `product=` filter |
+| `GET /api/v1/status` | Freshness of every data source |
 | `GET /api/doc` | This page |
 | `GET /api/openapi.json`, `/api/docs` | OpenAPI schema and interactive docs |
 
@@ -111,6 +112,32 @@ curl -s 'https://websec.in/api/v1/vulns?product=nginx&priority=CRITICAL,HIGH&sin
 
 Accepts a CVE id or any alias (`GHSA-...`, `PYSEC-...`). Returns `item` with all fields, including `events`.
 Returns 404 if the record is unknown.
+
+### GET /api/v1/status — is the data fresh
+
+`generated` in every response is the time the response was built, not the time the sources were checked.
+To judge freshness, use this endpoint. `ok` is `true` when every enabled source is in state `ok`.
+Each item in `items`:
+
+| Field | Meaning |
+|---|---|
+| `source` | `cvelist`, `cveapi`, `osv`, `kev`, `epss`, `nginx` |
+| `state` | `ok`, `stale` (no success for 3+ intervals), `failing` (last attempt failed), `disabled` |
+| `enabled` | Whether the collector is on |
+| `interval_seconds` | How often the source is checked |
+| `last_attempt_at` | Last check, successful or not |
+| `last_success_at` | Last successful check |
+| `consecutive_failures` | Failed checks in a row, 0 after a success |
+| `last_error` | Why the last check failed, `null` if it succeeded |
+| `last_data_change_at` | When the source last brought new or changed data |
+| `last_run_changes` | New or changed records in the last successful check |
+
+Times are UTC, ISO 8601. A quiet source (`last_data_change_at` days ago) is normal for KEV, OSV and nginx
+if `last_success_at` is recent.
+
+```
+curl -s https://websec.in/api/v1/status
+```
 
 ## Example: an agent that patches servers
 

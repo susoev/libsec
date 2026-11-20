@@ -94,6 +94,9 @@ def test_web():
     d = c.get('/api/high10?n=500', headers={'host': 'websec.in'})
     assert d.status_code == 400 and d.json()['result'] is False
     assert c.get('/api/high10', headers={'host': 'ru.websec.in'}, follow_redirects=False).status_code == 301
+    d = c.get('/api/v1/status', headers={'host': 'websec.in'}).json()
+    assert d['result'] is True and d['items'] and {'last_attempt_at', 'last_success_at', 'interval_seconds', 'enabled',
+                                                   'consecutive_failures', 'last_error', 'last_data_change_at'} <= set(d['items'][0])
 
 
 if __name__ == '__main__':
