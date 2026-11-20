@@ -1,9 +1,9 @@
 """Воркер: по расписанию запускает коллекторы (у каждого свой интервал, меняется в таблице sources),
-затем пересчёт и очередь Telegram. ИИ-анализ — отдельный короткий запуск по таймеру (libsec.ai). Один процесс — один писатель SQLite.
+затем пересчёт и очередь Telegram. ИИ-анализ — отдельный короткий запуск по таймеру (websec.ai). Один процесс — один писатель SQLite.
 
-  python -m libsec.worker            цикл (systemd: libsec-worker)
-  python -m libsec.worker once [имя…]  один проход (все или указанные источники) и выход
-  python -m libsec.worker reparse      после правки каталога/парсеров: заново разобрать сохранённые записи,
+  python -m websec.worker            цикл (systemd: websec-worker)
+  python -m websec.worker once [имя…]  один проход (все или указанные источники) и выход
+  python -m websec.worker reparse      после правки каталога/парсеров: заново разобрать сохранённые записи,
                                        сбросить HTTP-кэш KEV/nginx/OSV-дельт (чтобы взять новые совпадения), пересчитать всё
 """
 import json, logging, signal, sys, time, traceback

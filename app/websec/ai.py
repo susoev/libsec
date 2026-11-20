@@ -1,6 +1,6 @@
 """ИИ-анализ уязвимостей через локальный клиент Claude (подписка), без API и ключей. Решение владельца 2026-11-20.
 
-Схема «разбудить — получить — заснуть»: таймер libsec-ai.timer раз в 10 минут запускает `python -m libsec.ai`.
+Схема «разбудить — получить — заснуть»: таймер websec-ai.timer раз в 10 минут запускает `python -m websec.ai`.
 Если есть свежие записи ленты без разбора (или их факты изменились), процесс будит `claude -p` на пачку до BATCH записей,
 получает JSON по схеме, сохраняет в analysis и завершается. Постоянного процесса нет.
 
@@ -19,17 +19,17 @@ from .db import DATA, connect, dumps, loads
 from .pipeline import h
 
 log = logging.getLogger('ai')
-CLI = os.environ.get('LIBSEC_CLAUDE', '/home/ubuntu/.local/bin/claude')
-BATCH = int(os.environ.get('LIBSEC_AI_BATCH', '8'))
-MAX_BATCHES = int(os.environ.get('LIBSEC_AI_MAX_BATCHES', '2'))
-BATCHES_PER_HOUR = int(os.environ.get('LIBSEC_AI_PER_HOUR', '6'))
-FRESH_DAYS = int(os.environ.get('LIBSEC_AI_FRESH_DAYS', '7'))
+CLI = os.environ.get('WEBSEC_CLAUDE', '/home/ubuntu/.local/bin/claude')
+BATCH = int(os.environ.get('WEBSEC_AI_BATCH', '8'))
+MAX_BATCHES = int(os.environ.get('WEBSEC_AI_MAX_BATCHES', '2'))
+BATCHES_PER_HOUR = int(os.environ.get('WEBSEC_AI_PER_HOUR', '6'))
+FRESH_DAYS = int(os.environ.get('WEBSEC_AI_FRESH_DAYS', '7'))
 TIMEOUT = 1200
 PROMPT_VERSION = 4
-TR_BATCH = int(os.environ.get('LIBSEC_TR_BATCH', '10'))
-TR_MAX_CALLS = int(os.environ.get('LIBSEC_TR_MAX_CALLS', '3'))
-TR_PER_HOUR = int(os.environ.get('LIBSEC_TR_PER_HOUR', '8'))
-TR_MODEL = os.environ.get('LIBSEC_TR_MODEL', 'sonnet')
+TR_BATCH = int(os.environ.get('WEBSEC_TR_BATCH', '10'))
+TR_MAX_CALLS = int(os.environ.get('WEBSEC_TR_MAX_CALLS', '3'))
+TR_PER_HOUR = int(os.environ.get('WEBSEC_TR_PER_HOUR', '8'))
+TR_MODEL = os.environ.get('WEBSEC_TR_MODEL', 'sonnet')
 TR_NAMES = {'es': 'Spanish', 'pt': 'Portuguese (Brazilian)', 'fr': 'French', 'de': 'German', 'ru': 'Russian',
             'zh': 'Simplified Chinese', 'ja': 'Japanese'}
 
@@ -69,7 +69,7 @@ Rules:
 
 
 def enabled():
-    return os.environ.get('LIBSEC_AI', '1') != '0' and os.path.exists(CLI)
+    return os.environ.get('WEBSEC_AI', '1') != '0' and os.path.exists(CLI)
 
 
 def facts_for(v):
@@ -107,7 +107,7 @@ def verify(out, fin):
 
 def claude(prompt, model=None):
     """claude -p без инструментов и настроек -> JSON-объект из ответа."""
-    env = {**os.environ, 'SEC_TG': '0', 'LIBSEC_JOB': '1'}
+    env = {**os.environ, 'SEC_TG': '0', 'WEBSEC_JOB': '1'}
     p = subprocess.run([CLI, '-p', '--output-format', 'json', '--tools', '', '--setting-sources', '', '--strict-mcp-config',
                         '--no-session-persistence'] + (['--model', model] if model else []),
                        input=prompt, capture_output=True, text=True, timeout=TIMEOUT, env=env, cwd='/tmp')

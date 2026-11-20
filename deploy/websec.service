@@ -1,0 +1,13 @@
+[Unit]
+Description=websec web (websec.in) -> 127.0.0.1:8795
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/sec/app
+ExecStart=/home/ubuntu/venvs/websec/bin/uvicorn websec.web:app --host 127.0.0.1 --port 8795 --workers 2 --proxy-headers --no-access-log
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,11 +1,11 @@
 #!/bin/bash
-# Синхрон ~/sec <-> github.com/susoev/libsec и выкладка на websec.in.
+# Синхрон ~/sec <-> github.com/susoev/websec.in и выкладка на websec.in.
 #   bin/sync "сообщение"   закоммитить всё изменённое, pull --rebase, push, применить
 #   bin/sync               только pull/push + применить
 #   bin/sync --apply       применить всё (юниты, nginx, зависимости, рестарт) без git
 set -euo pipefail
 cd "$(dirname "$0")/.."
-VENV=/home/ubuntu/venvs/libsec
+VENV=/home/ubuntu/venvs/websec
 apply_all=0
 if [ "${1:-}" = "--apply" ]; then
   apply_all=1; changed=""
@@ -26,10 +26,10 @@ if has '^app/requirements.txt'; then
   $VENV/bin/pip -q install -r app/requirements.txt; restart=1
 fi
 if has '^deploy/.*\.\(service\|timer\)'; then
-  sudo cp deploy/libsec.service deploy/libsec-worker.service deploy/libsec-ai.service deploy/libsec-ai.timer /etc/systemd/system/
+  sudo cp deploy/websec.service deploy/websec-worker.service deploy/websec-ai.service deploy/websec-ai.timer /etc/systemd/system/
   sudo systemctl daemon-reload
-  sudo systemctl enable -q libsec libsec-worker
-  sudo systemctl enable -q --now libsec-ai.timer; restart=1
+  sudo systemctl enable -q websec websec-worker
+  sudo systemctl enable -q --now websec-ai.timer; restart=1
 fi
 if has '^deploy/websec.in.nginx'; then
   sudo cp deploy/websec.in.nginx /etc/nginx/sites-available/websec.in
@@ -39,7 +39,7 @@ if has '^deploy/websec.in.nginx'; then
 fi
 has '^app/' && restart=1
 if [ $restart = 1 ]; then
-  sudo systemctl restart libsec libsec-worker; sleep 2
+  sudo systemctl restart websec websec-worker; sleep 2
 fi
 git log -1 --format='HEAD %h %s'
 curl -sf https://websec.in/health >/dev/null && echo "websec.in: ok" || { echo "websec.in: НЕ отвечает"; exit 1; }

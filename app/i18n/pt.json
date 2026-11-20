@@ -44,7 +44,7 @@
  "catalog": "catálogo",
  "OpenAPI docs": "documentação OpenAPI",
  "Open source": "Código aberto",
- "The code of the collectors, the site and the API is public: <a href=\"{u}\" rel=\"noopener\">github.com/susoev/libsec</a>. Issues and pull requests are welcome.": "O código dos coletores, do site e da API é público: <a href=\"{u}\" rel=\"noopener\">github.com/susoev/libsec</a>. Issues e pull requests são bem-vindos.",
+ "The code of the collectors, the site and the API is public: <a href=\"{u}\" rel=\"noopener\">github.com/susoev/websec.in</a>. Issues and pull requests are welcome.": "O código dos coletores, do site e da API é público: <a href=\"{u}\" rel=\"noopener\">github.com/susoev/websec.in</a>. Issues e pull requests são bem-vindos.",
  "Languages": "Idiomas",
  "Caveats": "Ressalvas",
  "Matching by product names is heuristic and can miss or over-include items; AI summaries and translations can be wrong — the sources and the version table are authoritative. No exploit code is published here.": "A correspondência por nomes de produtos é heurística e pode deixar itens de fora ou incluir itens a mais; resumos por AI e traduções podem conter erros — as fontes e a tabela de versões são a referência oficial. Nenhum código de exploit é publicado aqui.",

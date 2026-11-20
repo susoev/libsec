@@ -26,7 +26,7 @@ SITE = origin(i18n.DEFAULT)
 PRIOS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNRATED']
 PAGE = 30
 
-app = FastAPI(title='libsec', docs_url='/api/docs', redoc_url=None, openapi_url='/api/openapi.json')
+app = FastAPI(title='websec', docs_url='/api/docs', redoc_url=None, openapi_url='/api/openapi.json')
 app.mount('/static', StaticFiles(directory=BASE / 'static'), name='static')
 tpl = Jinja2Templates(directory=BASE / 'templates')
 
@@ -104,7 +104,7 @@ def ld_dataset(L):
 
 
 def ld_source_code():
-    return {'@context': 'https://schema.org', '@type': 'SoftwareSourceCode', 'name': 'libsec', 'codeRepository': i18n.GITHUB,
+    return {'@context': 'https://schema.org', '@type': 'SoftwareSourceCode', 'name': 'websec', 'codeRepository': i18n.GITHUB,
             'programmingLanguage': 'Python', 'runtimePlatform': 'Python 3', 'author': ld_org(),
             'description': 'Collectors, deduplication, priority rule, AI summaries, site, RSS and JSON API of ' + i18n.BRAND}
 

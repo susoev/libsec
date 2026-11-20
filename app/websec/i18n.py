@@ -1,7 +1,7 @@
 """Языки сайта: английский на websec.in, переводы на двухбуквенных поддоменах (es.websec.in, …).
 
 Интерфейс — словари app/i18n/<lang>.json (ключ — английская строка). Тексты ИИ-разборов переводит
-libsec.ai (таблица analysis_tr), исходные описания CVE остаются на английском.
+websec.ai (таблица analysis_tr), исходные описания CVE остаются на английском.
 """
 import json, time
 from pathlib import Path
@@ -10,7 +10,7 @@ from markupsafe import Markup
 
 DOMAIN = 'websec.in'
 BRAND = 'WebSec'
-GITHUB = 'https://github.com/susoev/libsec'
+GITHUB = 'https://github.com/susoev/websec.in'
 DEFAULT = 'en'
 # порядок = порядок в переключателе; hreflang / og:locale / имя на своём языке
 LANGS = {
@@ -60,7 +60,7 @@ def ago(t, lang):
     return time.strftime('%Y-%m-%d', time.gmtime(t))
 
 
-# ---------- перевод ИИ-разбора (пишет libsec.ai, читает сайт)
+# ---------- перевод ИИ-разбора (пишет websec.ai, читает сайт)
 TR_FIELDS = ('headline', 'summary', 'affects', 'preconditions', 'action', 'score_reasoning', 'vuln_type')
 TR_VERSION = 1
 

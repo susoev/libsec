@@ -44,7 +44,7 @@
  "catalog": "каталог",
  "OpenAPI docs": "документация OpenAPI",
  "Open source": "Открытый исходный код",
- "The code of the collectors, the site and the API is public: <a href=\"{u}\" rel=\"noopener\">github.com/susoev/libsec</a>. Issues and pull requests are welcome.": "Код сборщиков, сайта и API открыт: <a href=\"{u}\" rel=\"noopener\">github.com/susoev/libsec</a>. Issues и pull requests приветствуются.",
+ "The code of the collectors, the site and the API is public: <a href=\"{u}\" rel=\"noopener\">github.com/susoev/websec.in</a>. Issues and pull requests are welcome.": "Код сборщиков, сайта и API открыт: <a href=\"{u}\" rel=\"noopener\">github.com/susoev/websec.in</a>. Issues и pull requests приветствуются.",
  "Languages": "Языки",
  "Caveats": "Оговорки",
  "Matching by product names is heuristic and can miss or over-include items; AI summaries and translations can be wrong — the sources and the version table are authoritative. No exploit code is published here.": "Сопоставление по названиям продуктов эвристическое и может пропускать записи или включать лишние; AI-сводки и переводы могут содержать ошибки — достоверными являются источники и таблица версий. Код эксплойтов здесь не публикуется.",

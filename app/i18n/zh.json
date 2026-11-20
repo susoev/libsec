@@ -44,7 +44,7 @@
  "catalog": "目录",
  "OpenAPI docs": "OpenAPI 文档",
  "Open source": "开源",
- "The code of the collectors, the site and the API is public: <a href=\"{u}\" rel=\"noopener\">github.com/susoev/libsec</a>. Issues and pull requests are welcome.": "采集器、网站和 API 的代码均已公开：<a href=\"{u}\" rel=\"noopener\">github.com/susoev/libsec</a>。欢迎提交 issue 和 pull request。",
+ "The code of the collectors, the site and the API is public: <a href=\"{u}\" rel=\"noopener\">github.com/susoev/websec.in</a>. Issues and pull requests are welcome.": "采集器、网站和 API 的代码均已公开：<a href=\"{u}\" rel=\"noopener\">github.com/susoev/websec.in</a>。欢迎提交 issue 和 pull request。",
  "Languages": "语言",
  "Caveats": "注意事项",
  "Matching by product names is heuristic and can miss or over-include items; AI summaries and translations can be wrong — the sources and the version table are authoritative. No exploit code is published here.": "按产品名称匹配属于启发式方法，可能遗漏或误收条目；AI 摘要和翻译可能有误 — 以数据来源和版本表为准。本站不发布任何漏洞利用代码。",

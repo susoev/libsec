@@ -132,4 +132,4 @@ the issue without changing the upstream version, so check the distribution's sec
 
 The data is free to use. Facts: CVE List (CVE Terms of Use), OSV/GitHub Advisory (CC-BY 4.0), CISA KEV
 and NVD (public domain), EPSS (FIRST.org, free use with attribution). Summaries: WebSec, AI-assisted,
-and they can be wrong. Source code: https://github.com/susoev/libsec
+and they can be wrong. Source code: https://github.com/susoev/websec.in

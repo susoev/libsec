@@ -1,4 +1,4 @@
-# libsec
+# websec
 
 A vulnerability tracker for the web stack: PHP, Python, MySQL/MariaDB, PostgreSQL, nginx, Apache, Tomcat, OpenSSL, Docker, Laravel, Django and more — 50 products.
 It collects from several sources, merges duplicates, ranks by urgency, writes short AI summaries and publishes a feed, RSS, JSON API and Telegram posts.
@@ -18,26 +18,26 @@ site · RSS · /api/v1 · Telegram queue (urgent now, rest as daily digest)
 ```
 
 ## Layout
-- `app/libsec/catalog.py` — tracked products and how each is recognised (CNA names, CPE, distro packages, OSV packages, KEV).
-- `app/libsec/collectors/` — one module per source (`NAME`, `INTERVAL`, `run()`).
-- `app/libsec/normalize.py`, `pipeline.py` — parsing, dedup, recompute, events.
-- `app/libsec/ai.py` — AI analysis: a timer wakes the local `claude -p` (subscription, no API keys) on a batch of fresh records, stores the JSON, translates finished analyses into the site languages and exits.
-- `app/libsec/tg.py` — Telegram queue and rules.
-- `app/libsec/worker.py` — scheduler: `python -m libsec.worker [once [source…] | reparse]`.
-- `app/libsec/web.py`, `app/templates/` — the site, RSS, API, sitemap.
-- `app/libsec/og.py` — og:image / Twitter card previews (1200×630 PNG via Pillow), drawn on request, cached in memory.
-- `app/libsec/i18n.py`, `app/i18n/*.json` — languages by subdomain, UI strings; `tools/i18n_gen.py` fills missing strings via `claude -p`.
-- `deploy/` — systemd units `libsec` (web), `libsec-worker` (collectors) and `libsec-ai.timer`, nginx config.
+- `app/websec/catalog.py` — tracked products and how each is recognised (CNA names, CPE, distro packages, OSV packages, KEV).
+- `app/websec/collectors/` — one module per source (`NAME`, `INTERVAL`, `run()`).
+- `app/websec/normalize.py`, `pipeline.py` — parsing, dedup, recompute, events.
+- `app/websec/ai.py` — AI analysis: a timer wakes the local `claude -p` (subscription, no API keys) on a batch of fresh records, stores the JSON, translates finished analyses into the site languages and exits.
+- `app/websec/tg.py` — Telegram queue and rules.
+- `app/websec/worker.py` — scheduler: `python -m websec.worker [once [source…] | reparse]`.
+- `app/websec/web.py`, `app/templates/` — the site, RSS, API, sitemap.
+- `app/websec/og.py` — og:image / Twitter card previews (1200×630 PNG via Pillow), drawn on request, cached in memory.
+- `app/websec/i18n.py`, `app/i18n/*.json` — languages by subdomain, UI strings; `tools/i18n_gen.py` fills missing strings via `claude -p`.
+- `deploy/` — systemd units `websec` (web), `websec-worker` (collectors) and `websec-ai.timer`, nginx config.
 - `docs/api.md` — API guide, served at https://websec.in/api/doc.
 - `docs/brief.md` — the original brief; `docs/decisions.md` — decisions made for the MVP.
 
 ## Run
 ```bash
 sudo apt install fonts-noto-cjk                               # fonts for og:image previews (Latin, Cyrillic, CJK)
-python3 -m venv ~/venvs/libsec && ~/venvs/libsec/bin/pip install -r app/requirements.txt
-cd app && ~/venvs/libsec/bin/python -m libsec.worker once      # collect everything once
-~/venvs/libsec/bin/uvicorn libsec.web:app --port 8795          # site
-~/venvs/libsec/bin/python -m tests.test_core                   # parser tests on snapshots
+python3 -m venv ~/venvs/websec && ~/venvs/websec/bin/pip install -r app/requirements.txt
+cd app && ~/venvs/websec/bin/python -m websec.worker once      # collect everything once
+~/venvs/websec/bin/uvicorn websec.web:app --port 8795          # site
+~/venvs/websec/bin/python -m tests.test_core                   # parser tests on snapshots
 ```
 
-Data is stored in `data/libsec.db` (SQLite, not in git).
+Data is stored in `data/websec.db` (SQLite, not in git).

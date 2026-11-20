@@ -1,10 +1,10 @@
-"""SQLite (WAL): один файл data/libsec.db. Пишет воркер, сайт только читает."""
+"""SQLite (WAL): один файл data/websec.db. Пишет воркер, сайт только читает."""
 import json, os, sqlite3, time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA = Path(os.environ.get('LIBSEC_DATA', ROOT / 'data'))
-DB = Path(os.environ.get('LIBSEC_DB', DATA / 'libsec.db'))
+DATA = Path(os.environ.get('WEBSEC_DATA', ROOT / 'data'))
+DB = Path(os.environ.get('WEBSEC_DB', DATA / 'websec.db'))
 
 SCHEMA = """
 create table if not exists sources(

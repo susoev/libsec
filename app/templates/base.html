@@ -65,7 +65,7 @@
   <p>{{ BRAND }} · {{ _('data:') }} <a href="https://www.cve.org/">CVE</a>, <a href="https://osv.dev/">OSV</a> &amp; <a href="https://github.com/advisories">GitHub Advisory</a> (CC-BY 4.0),
   <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog">CISA KEV</a>, <a href="https://www.first.org/epss/">EPSS</a>, {{ _('vendor advisories.') }}
   {{ _('Summaries marked AI are machine-generated from these facts — verify before acting.') }}</p>
-  <p>{{ _('Open source:') }} <a href="{{ GITHUB }}" rel="noopener">github.com/susoev/libsec</a> · <a href="/feed.xml">RSS</a> · <a href="/api/docs">API</a> · <a href="/sitemap.xml">Sitemap</a> · <a href="/llms.txt">llms.txt</a></p>
+  <p>{{ _('Open source:') }} <a href="{{ GITHUB }}" rel="noopener">github.com/susoev/websec.in</a> · <a href="/feed.xml">RSS</a> · <a href="/api/docs">API</a> · <a href="/sitemap.xml">Sitemap</a> · <a href="/llms.txt">llms.txt</a></p>
   <p class="langlist">{% for l, name, href in switch %}{% if l == L %}<b>{{ name }}</b>{% else %}<a href="{{ href }}" hreflang="{{ LANGS[l].hreflang }}" lang="{{ LANGS[l].hreflang }}">{{ name }}</a>{% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>
 </div></footer>
 </body>

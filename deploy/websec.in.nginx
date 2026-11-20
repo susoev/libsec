@@ -1,6 +1,6 @@
-# libsec: https://websec.in -> ~/sec/app (127.0.0.1:8795)
+# websec: https://websec.in -> ~/sec/app (127.0.0.1:8795)
 # Сертификат: websec.in + *.websec.in (certbot dns-01 через API Dynadot, хуки /usr/local/sbin/dynadot-acme-*).
-# Языковые зеркала: es pt fr de ru zh ja .websec.in -> тот же бэкенд, язык выбирает приложение по Host (libsec/i18n.py).
+# Языковые зеркала: es pt fr de ru zh ja .websec.in -> тот же бэкенд, язык выбирает приложение по Host (websec/i18n.py).
 # www и прочие поддомены, а также старый libsec.alid.in -> 301 на https://websec.in.
 server {
 	listen 80;

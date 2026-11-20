@@ -44,7 +44,7 @@
  "catalog": "カタログ",
  "OpenAPI docs": "OpenAPI ドキュメント",
  "Open source": "オープンソース",
- "The code of the collectors, the site and the API is public: <a href=\"{u}\" rel=\"noopener\">github.com/susoev/libsec</a>. Issues and pull requests are welcome.": "コレクター、サイト、API のコードは公開されています：<a href=\"{u}\" rel=\"noopener\">github.com/susoev/libsec</a>。Issue やプルリクエストを歓迎します。",
+ "The code of the collectors, the site and the API is public: <a href=\"{u}\" rel=\"noopener\">github.com/susoev/websec.in</a>. Issues and pull requests are welcome.": "コレクター、サイト、API のコードは公開されています：<a href=\"{u}\" rel=\"noopener\">github.com/susoev/websec.in</a>。Issue やプルリクエストを歓迎します。",
  "Languages": "言語",
  "Caveats": "注意事項",
  "Matching by product names is heuristic and can miss or over-include items; AI summaries and translations can be wrong — the sources and the version table are authoritative. No exploit code is published here.": "製品名によるマッチングはヒューリスティックなため、項目の見落としや過剰な包含が起こり得ます。AI 要約や翻訳は誤っている可能性があります — 情報源とバージョン表が正となります。このサイトではエクスプロイトコードは公開していません。",

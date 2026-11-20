@@ -6,8 +6,8 @@
   escalation  — оценка поднялась до HIGH/CRITICAL (было ниже или не было)
   digest      — раз в сутки (DIGEST_HOUR UTC) списком всё остальное новое за сутки
 Пост собирается в момент отправки (подхватывает ИИ-резюме, если оно уже готово); alert ждёт ИИ до AI_WAIT.
-Канал: LIBSEC_TG_CHAT (+ LIBSEC_TG_THREAD для топика). Пока канала нет — тестовый режим: топик Sec,
-не больше LIBSEC_TG_TEST_MAX постов в сутки.
+Канал: WEBSEC_TG_CHAT (+ WEBSEC_TG_THREAD для топика). Пока канала нет — тестовый режим: топик Sec,
+не больше WEBSEC_TG_TEST_MAX постов в сутки.
 """
 import html, json, logging, os, time
 from datetime import datetime, timezone
@@ -17,7 +17,7 @@ from .db import ROOT, loads
 
 log = logging.getLogger('tg')
 ENV_FILE = ROOT / '.secrets/tg.env'
-SITE = os.environ.get('LIBSEC_SITE', 'https://websec.in')
+SITE = os.environ.get('WEBSEC_SITE', 'https://websec.in')
 PER_MIN = 15           # лимит Telegram ~20/мин в один чат — держим запас
 AI_WAIT = 20 * 60      # alert ждёт ИИ-резюме не дольше
 DIGEST_HOUR = 9        # UTC
@@ -28,11 +28,11 @@ def env():
     e = {}
     if ENV_FILE.exists():
         e = dict(l.split('=', 1) for l in ENV_FILE.read_text().splitlines() if '=' in l and not l.startswith('#'))
-    chat = os.environ.get('LIBSEC_TG_CHAT') or e.get('TG_CHAT_ID', '').strip()
-    thread = os.environ.get('LIBSEC_TG_THREAD', '' if os.environ.get('LIBSEC_TG_CHAT') else e.get('TG_THREAD_ID', '')).strip()
-    test = not os.environ.get('LIBSEC_TG_CHAT')
+    chat = os.environ.get('WEBSEC_TG_CHAT') or e.get('TG_CHAT_ID', '').strip()
+    thread = os.environ.get('WEBSEC_TG_THREAD', '' if os.environ.get('WEBSEC_TG_CHAT') else e.get('TG_THREAD_ID', '')).strip()
+    test = not os.environ.get('WEBSEC_TG_CHAT')
     return {'token': e.get('TG_BOT_TOKEN', '').strip(), 'chat': chat, 'thread': thread, 'test': test,
-            'test_max': int(os.environ.get('LIBSEC_TG_TEST_MAX', '3')), 'off': os.environ.get('LIBSEC_TG', '1') == '0'}
+            'test_max': int(os.environ.get('WEBSEC_TG_TEST_MAX', '3')), 'off': os.environ.get('WEBSEC_TG', '1') == '0'}
 
 
 def consider(c, v, typ, old):
@@ -190,6 +190,6 @@ def ops_alert(text):
     if not e.get('TG_BOT_TOKEN'):
         return
     try:
-        send(e['TG_BOT_TOKEN'].strip(), e['TG_CHAT_ID'].strip(), e.get('TG_THREAD_ID', '').strip(), '🛠 libsec: ' + esc(text))
+        send(e['TG_BOT_TOKEN'].strip(), e['TG_CHAT_ID'].strip(), e.get('TG_THREAD_ID', '').strip(), '🛠 websec: ' + esc(text))
     except Exception as ex:  # noqa: BLE001
         log.warning('ops alert: %s', ex)

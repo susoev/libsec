@@ -1,8 +1,8 @@
 """Быстрые проверки парсеров на сохранённых снимках: python -m tests.test_core (из app/)."""
 import json
 from pathlib import Path
-from libsec import catalog, normalize
-from libsec.collectors import nginx
+from websec import catalog, normalize
+from websec.collectors import nginx
 
 FX = Path(__file__).parent / 'fixtures'
 
@@ -44,7 +44,7 @@ def test_i18n():
     """Все строки интерфейса переведены на все языки, плейсхолдеры и теги на месте; язык по Host."""
     import json, re, subprocess, sys
     from pathlib import Path
-    from libsec import i18n
+    from websec import i18n
     root = Path(__file__).resolve().parents[2]
     keys = json.loads(subprocess.check_output([sys.executable, str(root / 'tools/i18n_keys.py')]))
     marks = lambda s: sorted(re.findall(r'\{\w+\}|<[^>]+>', s))
@@ -61,7 +61,7 @@ def test_i18n():
 
 
 def test_tr_ok():
-    from libsec.ai import tr_ok
+    from websec.ai import tr_ok
     src = {'summary': 'Fixed in 1.2.3 and 2.0.', 'preconditions': ['a', 'b']}
     assert tr_ok(src, {'summary': 'Corregido en 1.2.3 y 2.0.', 'preconditions': ['x', 'y']})
     assert not tr_ok(src, {'summary': 'Corregido en 1.2.4 y 2.0.', 'preconditions': ['x', 'y']})
@@ -70,11 +70,11 @@ def test_tr_ok():
 
 def test_web():
     """Смоук сайта и API на живой БД (если она есть): страницы на языках, свежие уязвимости, og-картинки, конверт API."""
-    from libsec.db import DB
+    from websec.db import DB
     if not DB.exists():
         return
     from fastapi.testclient import TestClient
-    from libsec.web import app, db
+    from websec.web import app, db
     c = TestClient(app)
     ids = [r[0] for r in db().execute('select id from vulns where listed=1 order by feed_ts desc limit 40')]
     ids += [r[0] for r in db().execute("select distinct vuln_id from events where type='scored' limit 20")]

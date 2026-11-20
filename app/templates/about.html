@@ -40,7 +40,7 @@
 </ul>
 
 <h2>{{ _('Open source') }}</h2>
-<p>{{ _('The code of the collectors, the site and the API is public: <a href="{u}" rel="noopener">github.com/susoev/libsec</a>. Issues and pull requests are welcome.', u=GITHUB) }}</p>
+<p>{{ _('The code of the collectors, the site and the API is public: <a href="{u}" rel="noopener">github.com/susoev/websec.in</a>. Issues and pull requests are welcome.', u=GITHUB) }}</p>
 
 <h2>{{ _('Languages') }}</h2>
 <p class="plinks">{% for l, name, href in switch %}<a href="{{ href }}" hreflang="{{ LANGS[l].hreflang }}" lang="{{ LANGS[l].hreflang }}">{{ name }}</a>{{ ' · ' if not loop.last }}{% endfor %}</p>

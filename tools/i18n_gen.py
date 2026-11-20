@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 NAMES = {'es': 'Spanish', 'pt': 'Portuguese (Brazilian)', 'fr': 'French', 'de': 'German', 'ru': 'Russian',
          'zh': 'Simplified Chinese', 'ja': 'Japanese'}
-CLI = os.environ.get('LIBSEC_CLAUDE', str(Path.home() / '.local/bin/claude'))
+CLI = os.environ.get('WEBSEC_CLAUDE', str(Path.home() / '.local/bin/claude'))
 
 
 def marks(s):
@@ -29,7 +29,7 @@ def gen(lang):
                   + json.dumps(todo, ensure_ascii=False))
         p = subprocess.run([CLI, '-p', '--output-format', 'json', '--tools', '', '--setting-sources', '', '--strict-mcp-config',
                             '--no-session-persistence'], input=prompt, capture_output=True, text=True, timeout=1800,
-                           env={**os.environ, 'SEC_TG': '0', 'LIBSEC_JOB': '1'}, cwd='/tmp')
+                           env={**os.environ, 'SEC_TG': '0', 'WEBSEC_JOB': '1'}, cwd='/tmp')
         res = json.loads(p.stdout)['result'].strip()
         got = json.loads(res[res.find('{'):res.rfind('}') + 1])
         for k in todo:
